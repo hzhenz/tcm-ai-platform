@@ -1,0 +1,97 @@
+/* ================= 极简新中式 色彩与变量 ================= */
+
+:root {
+  /* 宣纸白背景 */
+  --bg-page: #FBFBF9;       
+  /* 苍青山/深松石绿 */
+  --primary: #1C2B26;       
+  --primary-light: #2A4039;
+  /* 黛金/哑光金（用于点缀） */
+  --accent-gold: #C2A878;   
+  --accent-gold-hover: #D4BA89;
+  /* 墨色文字 */
+  --text-main: #2C2C2C;     
+  --text-muted: #666666;
+  
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.5);
+  --shadow-soft: 0 10px 40px rgba(28, 43, 38, 0.05);
+  --shadow-hover: 0 20px 40px rgba(28, 43, 38, 0.1);
+  
+  /* 衬线字体营造传统高级感 */
+  --font-serif: "Noto Serif SC", "Songti SC", "STSong", "Microsoft YaHei", serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  background-color: var(--bg-page);
+  color: var(--text-main);
+  line-height: 1.6;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+.container {
+  width: 90%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* ================= 通用按钮 ================= */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 32px;
+  border-radius: 40px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: none;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--primary-light);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(28, 43, 38, 0.2);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--primary);
+  border: 1px solid var(--primary);
+}
+
+.btn-outline:hover {
+  background: rgba(28, 43, 38, 0.05);
+}
+
+/* ================= 动画 ================= */
+@keyframes reveal {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.reveal-item {
+  opacity: 0;
+  transform: translateY(30px);
+  animation: reveal 0.8s cubic-bezier(0.5, 0, 0, 1) forwards;
+}
