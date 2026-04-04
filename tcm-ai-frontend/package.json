@@ -9,10 +9,18 @@
     "preview": "vite preview"
   },
   "dependencies": {
+<<<<<<< HEAD
     "@element-plus/icons-vue": "^2.3.2",
     "axios": "^1.14.0",
     "echarts": "^6.0.0",
+=======
+    "aos": "^2.3.4",
+>>>>>>> 9008ba41bbba9f1892b2d3d052fa030acc6a06df
     "element-plus": "^2.13.6",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
+    "marked": "^17.0.5",
+    "three": "^0.183.2",
     "vue": "^3.5.30",
     "vue-router": "^4.6.4"
   },
