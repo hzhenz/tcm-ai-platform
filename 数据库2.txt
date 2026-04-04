@@ -1,0 +1,26 @@
+USE tcm_ai;
+
+-- 1. 创建用户表 (虽然还没做登录，但问诊记录需要知道是谁查的)
+CREATE TABLE IF NOT EXISTS `user` (
+  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  `username` VARCHAR(50) NOT NULL UNIQUE COMMENT '用户名',
+  `password` VARCHAR(100) NOT NULL COMMENT '密码',
+  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
+
+-- 2. 创建问诊记录表 (带有了用于左侧列表展示的 title 字段)
+CREATE TABLE IF NOT EXISTS `consultation_log` (
+  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` BIGINT NOT NULL COMMENT '用户ID',
+  `title` VARCHAR(100) NOT NULL COMMENT '问诊主题',
+  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '问诊时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='问诊记录表';
+
+-- 3. 插入测试数据 (极其关键！先造一点假数据，等下我们用 Java 查出来)
+INSERT IGNORE INTO `user` (`id`, `username`, `password`) VALUES (1, '测试用户', '123456');
+
+INSERT INTO `consultation_log` (`user_id`, `title`, `create_time`) VALUES 
+(1, '头晕、乏力伴随失眠', '2026-04-03 14:30:00'),
+(1, '脾胃虚弱，食欲不振', '2026-04-01 09:15:00'),
+(1, '喜欢睡觉，不喜欢动', '2026-04-01 09:15:00'),
+(1, '春季养肝咨询记录', '2026-03-28 16:45:00');
