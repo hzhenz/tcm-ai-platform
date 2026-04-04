@@ -1,12 +1,608 @@
-<script setup>
-
-</script>
-
 <template>
-病情分析
+  <div class="bg-ancient-light font-chinese text-ancient-dark min-h-screen">
+    <header class="fixed top-0 left-0 right-0 bg-ancient-tan text-white text-center py-3 text-lg font-bold shadow-md z-30 flex items-center justify-center">
+      <i class="fa-solid fa-chevron-left absolute left-4 cursor-pointer text-xl" @click="goToHome"></i>
+      智能问诊 · 望闻问切之"问"
+    </header>
 
+    <main class="pt-20 pb-6 flex flex-col md:flex-row gap-8 px-8 w-full h-screen">
+      
+      <aside class="w-full md:w-80 shrink-0 h-full bg-white rounded-lg shadow-lg flex flex-col p-4 border border-ancient-border/30 overflow-hidden">
+        
+        <button @click="startNewConsultation" class="w-full bg-ancient-tan hover:bg-ancient-dark text-white py-3 rounded-lg font-bold transition-colors mb-4 flex items-center justify-center gap-2 shadow-md shrink-0">
+          <i class="fa-solid fa-plus"></i> 新建问诊
+        </button>
+
+        <h2 class="text-lg font-bold text-ancient-dark mb-3 border-b-2 border-ancient-border pb-2 flex items-center gap-2 shrink-0">
+          <i class="fa-solid fa-clock-rotate-left text-ancient-tan"></i> 历史问诊
+        </h2>
+
+        <div class="flex-1 overflow-y-auto custom-scroll space-y-2 pr-1">
+          <div v-for="(item, index) in historyList" :key="index"
+               @click="loadHistory(item)"
+               :class="['group flex justify-between items-center p-3 hover:bg-ancient-cream border rounded-lg cursor-pointer transition-all', 
+                        currentId === item.id ? 'bg-ancient-cream border-ancient-tan shadow-sm' : 'bg-ancient-light border-transparent hover:border-ancient-border']">
+            <div class="truncate w-4/5">
+              <div class="font-bold text-ancient-dark truncate text-base">{{ item.title }}</div>
+              <div class="text-sm text-ancient-tan mt-1 opacity-80">{{ item.date }}</div>
+            </div>
+            <button @click.stop="deleteHistory(index, item.id)" class="hidden group-hover:flex text-red-500 hover:text-red-700 w-6 h-6 items-center justify-center rounded-full hover:bg-red-100 transition-colors">
+                <i class="fa-solid fa-trash-can text-sm"></i>
+            </button>
+          </div>
+
+          <div v-if="historyList.length === 0" class="text-center text-gray-400 mt-10 text-sm">
+            <i class="fa-solid fa-inbox text-3xl mb-2 opacity-50"></i>
+            <p>暂无问诊记录</p>
+          </div>
+        </div>
+      </aside>
+
+      <section class="flex-1 h-full bg-white/90 rounded-lg shadow-lg overflow-hidden flex flex-col border border-ancient-border/30">
+        
+        <div class="bg-ancient-cream px-4 py-3 border-b border-ancient-border flex justify-between items-center shadow-sm z-10 shrink-0">
+          <span class="text-ancient-dark font-bold text-sm flex items-center">
+            <i class="fa-solid fa-user-doctor mr-2 text-ancient-tan"></i> 当前问诊：{{ currentTopic }}
+          </span>
+          <button @click="generateSyndrome" class="bg-ancient-tan hover:bg-ancient-dark text-white px-3 py-1.5 rounded-md text-sm transition-colors flex items-center shadow">
+            <i class="fa-solid fa-scroll mr-1"></i> 结束问诊，生成报告
+          </button>
+        </div>
+
+        <div ref="chatContainerRef" class="flex-1 p-4 overflow-y-auto custom-scroll space-y-5 bg-white">
+          <div v-for="(msg, index) in chatMessages" :key="index">
+            <div v-if="msg.type === 'ai'" class="flex items-start gap-3">
+              <img src="https://picsum.photos/id/338/60/60" alt="古风医者" class="w-10 h-10 rounded-full border-2 border-ancient-border object-cover flex-shrink-0 mt-1">
+              <div class="ai-bubble" v-html="renderMarkdown(msg.content)"></div>
+            </div>
+            <div v-else class="flex justify-end gap-3">
+              <div class="user-bubble flex items-center gap-2">
+                {{ msg.content }}
+              </div>
+              <div class="w-10 h-10 rounded-full bg-ancient-tan text-white flex items-center justify-center font-bold flex-shrink-0 mt-1 border-2 border-ancient-border">
+                我
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white border-t border-ancient-border/50 p-4 shrink-0 z-10">
+          <div class="flex gap-3">
+            <input v-model="msgInput" @keypress.enter="sendMsg" type="text" placeholder="请输入症状，或点击麦克风语音描述..." 
+                   class="flex-1 px-5 py-4 text-lg border border-ancient-border rounded-full outline-none focus:border-ancient-tan focus:ring-1 focus:ring-ancient-tan bg-ancient-light/30 transition-all">
+            <button @click="startVoiceRecognition" :class="{'bg-red-500 animate-pulse': isRecording, 'bg-ancient-tan': !isRecording}" class="w-12 h-12 rounded-full text-white flex items-center justify-center hover:opacity-90 transition-all shadow shrink-0">
+              <i class="fa-solid fa-microphone"></i>
+            </button>
+            <button @click="sendMsg" class="w-12 h-12 rounded-full bg-ancient-tan text-white flex items-center justify-center hover:bg-ancient-dark transition-all shadow shrink-0">
+              <i class="fa-solid fa-paper-plane"></i>
+            </button>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <div class="bamboo-scroll flex items-center justify-center z-50" :class="{ 'show': isBambooModalVisible }">
+      <div ref="reportContentRef" 
+           class="scroll-content relative bg-[#F9F6EE] rounded-xl shadow-2xl w-[90%] max-w-3xl h-[85vh] flex flex-col overflow-hidden border border-[#D4B996]"
+           :class="{'!h-auto !overflow-visible export-mode': isExporting}">
+        
+        <button v-show="!isExporting" @click="closeBamboo" class="absolute top-4 right-4 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-[#D4B996]/20 text-[#8B4513] hover:bg-[#D4B996]/50 transition-colors">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+
+        <div class="flex-1 overflow-y-auto custom-scroll p-6 md:p-10 pb-24 text-[#3C2A21]"
+             :class="{'!overflow-visible !h-auto': isExporting}">
+          
+          <div class="flex flex-col items-center justify-center mb-8 border-b-2 border-[#D4B996]/30 pb-4">
+            <h3 class="text-3xl font-bold font-chinese tracking-widest text-[#5C3A21] mb-3">养生建议报告</h3>
+            <div class="w-16 h-1 bg-[#D4B996] rounded-full"></div>
+          </div>
+
+          <div class="flex flex-col md:flex-row justify-between bg-white/60 p-4 md:px-8 md:py-5 rounded-xl border border-[#D4B996]/50 mb-8 shadow-sm gap-4">
+            
+            <div class="flex items-center flex-1">
+              <div class="w-10 h-10 rounded-full bg-[#D4B996]/20 flex items-center justify-center mr-4 shrink-0 shadow-inner icon-circle">
+                <i class="fa-regular fa-clock text-[#8B4513] text-lg"></i>
+              </div>
+              <div class="flex flex-col">
+                <span class="text-sm text-[#8B4513]/70 font-bold mb-0.5 tracking-wider">问诊时间</span>
+                <span class="text-[#3C2A21] font-medium text-lg">{{ currentTime }}</span>
+              </div>
+            </div>
+
+            <div class="hidden md:flex items-center justify-center">
+              <div class="w-px h-12 bg-gradient-to-b from-transparent via-[#D4B996]/50 to-transparent"></div>
+            </div>
+            <div class="md:hidden w-full h-px bg-[#D4B996]/30 my-1"></div>
+
+            <div class="flex items-center flex-1 md:ml-4">
+              <div class="w-10 h-10 rounded-full bg-[#D4B996]/20 flex items-center justify-center mr-4 shrink-0 shadow-inner icon-circle">
+                <i class="fa-solid fa-clipboard-list text-[#8B4513] text-lg"></i>
+              </div>
+              <div class="flex flex-col">
+                <span class="text-sm text-[#8B4513]/70 font-bold mb-0.5 tracking-wider">问诊主题</span>
+                <span class="text-[#3C2A21] font-medium text-lg break-words">{{ currentTopic }}</span>
+              </div>
+            </div>
+
+          </div>
+          
+          <div class="bg-white/80 p-6 md:p-8 rounded-xl border border-[#D4B996]/40 shadow-inner">
+            <div class="flex items-center mb-5 pb-3 border-b border-[#D4B996]/30">
+              <i class="fa-solid fa-leaf text-[#8B4513] text-xl mr-2"></i>
+              <strong class="text-[#8B4513] text-xl font-chinese tracking-wider">AI 医师详尽调理方案</strong>
+            </div>
+            
+            <div class="report-markdown leading-relaxed" v-html="renderMarkdown(reportAdvice)"></div>
+          </div>
+
+          <p class="mt-10 text-sm opacity-50 text-center border-t border-[#D4B996]/30 pt-4">
+            本报告基于大语言模型辅助生成，仅供日常养生参考，不可替代线下执业医师面诊。
+          </p>
+        </div>
+
+        <div v-show="!isExporting" class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#F9F6EE] via-[#F9F6EE] to-transparent flex justify-center gap-6">
+          <button @click="copyReport" class="bg-white border-2 border-[#D4B996] text-[#8B4513] hover:bg-[#D4B996]/20 px-6 py-2.5 rounded-full font-bold transition-all shadow-md flex items-center">
+            <i class="fa-regular fa-copy mr-2"></i> 复制完整方案
+          </button>
+          <button @click="downloadReport" class="bg-[#D4B996] hover:bg-[#8B4513] text-white px-6 py-2.5 rounded-full font-bold transition-all shadow-md flex items-center">
+            <i class="fa-solid fa-download mr-2"></i> 保存高清报告
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
 </template>
 
-<style lang="css" scoped>
+<script setup>
+import { ref, nextTick, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { marked } from 'marked'
+import html2canvas from 'html2canvas'
+import jsPDF from 'jspdf'
 
+const router = useRouter()
+const currentId = ref(null) 
+const reportAdvice = ref('')
+
+const chatContainerRef = ref(null)
+const msgInput = ref('')
+const isReasonTreeVisible = ref(false)
+const isBambooModalVisible = ref(false)
+const isRecording = ref(false)
+const currentTime = ref('')
+
+const reportContentRef = ref(null)
+const isExporting = ref(false)
+const currentTopic = ref('新问诊')
+
+const initialGreeting = { type: 'ai', content: '你好，我是智能中医医师。请告诉我你哪里不舒服，我会为你辨证问诊~' }
+const chatMessages = ref([ {...initialGreeting} ])
+
+const renderMarkdown = (text) => {
+  if (!text) return ''
+  return marked.parse(text)
+}
+
+const historyList = ref([])
+
+const fetchHistory = async () => {
+  try {
+    const response = await fetch('http://localhost:8080/api/consultation/history')
+    const result = await response.json()
+    if (result.code === 200) {
+      historyList.value = result.data.map(item => ({
+        id: item.id,
+        title: item.title,
+        date: item.createTime,
+        messages: item.messages 
+      }))
+    }
+  } catch (error) {
+    console.error('获取历史记录失败:', error)
+  }
+}
+
+onMounted(() => {
+  fetchHistory()
+})
+
+const syncToDb = async () => {
+  try {
+    const response = await fetch('http://localhost:8080/api/consultation/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: currentId.value,
+        title: currentTopic.value,
+        messages: JSON.stringify(chatMessages.value)
+      })
+    })
+    const result = await response.json()
+    if (result.code === 200) {
+      if (!currentId.value) {
+        currentId.value = result.data.id
+      }
+      fetchHistory()
+    }
+  } catch (error) {
+    console.error('自动保存失败:', error)
+  }
+}
+
+const startNewConsultation = () => {
+  currentId.value = null 
+  chatMessages.value = [ {...initialGreeting} ]
+  isReasonTreeVisible.value = false
+  currentTopic.value = '新问诊'
+  msgInput.value = ''
+  setTimeout(scrollToBottom, 100)
+}
+
+const loadHistory = (item) => {
+  currentId.value = item.id 
+  currentTopic.value = item.title
+  if (item.messages) {
+    chatMessages.value = JSON.parse(item.messages)
+  } else {
+    chatMessages.value = [ { type: 'ai', content: '（这是一条没有聊天记录的老数据）' } ]
+  }
+  isReasonTreeVisible.value = false
+  setTimeout(scrollToBottom, 100)
+}
+
+const deleteHistory = async (index, id) => {
+  if(confirm('确认删除这条问诊记录吗？数据将永久丢失。')) {
+    try {
+      const response = await fetch(`http://localhost:8080/api/consultation/delete/${id}`, {
+        method: 'DELETE'
+      })
+      const result = await response.json()
+      if (result.code === 200) {
+        historyList.value.splice(index, 1)
+        if (historyList.value.length === 0 || currentId.value === id) {
+           startNewConsultation()
+        }
+      }
+    } catch (error) {
+      console.error('删除失败:', error)
+    }
+  }
+}
+
+const scrollToBottom = async () => {
+  await nextTick()
+  if (chatContainerRef.value) {
+    chatContainerRef.value.scrollTo({
+      top: chatContainerRef.value.scrollHeight,
+      behavior: 'smooth'
+    })
+  }
+}
+
+const sendMsg = async () => {
+  const content = msgInput.value.trim()
+  if (!content) return
+  
+  if (currentTopic.value === '新问诊') {
+    currentTopic.value = content.length > 10 ? content.substring(0, 10) + '...' : content
+  }
+
+  chatMessages.value.push({ type: 'user', content: content })
+  msgInput.value = ''
+  scrollToBottom()
+  await syncToDb()
+
+  const thinkingMsg = { type: 'ai', content: '<i class="fa-solid fa-spinner fa-spin mr-2"></i>老中医正在翻阅古籍知识库...' }
+  chatMessages.value.push(thinkingMsg)
+  const thinkingIndex = chatMessages.value.length - 1
+  scrollToBottom()
+
+  try {
+    const response = await fetch('http://localhost:8080/api/consultation/ask-ai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        content: content,
+        history: chatMessages.value.slice(0, -1).map(m => ({
+          role: m.type === 'ai' ? 'assistant' : 'user',
+          content: m.content
+        }))
+      })
+    })
+    
+    const result = await response.json()
+    if (result.code === 200) {
+      chatMessages.value[thinkingIndex].content = result.data
+      isReasonTreeVisible.value = true 
+      scrollToBottom()
+      await syncToDb() 
+    } else {
+      chatMessages.value[thinkingIndex].content = '请稍后再试。'
+    }
+  } catch (error) {
+    chatMessages.value[thinkingIndex].content = '（网络信号不佳，未能连接到诊室）'
+  }
+}
+
+const generateSyndrome = () => {
+  const now = new Date()
+  currentTime.value = `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`
+  
+  const aiMsgs = chatMessages.value.filter(msg => msg.type === 'ai')
+  if (aiMsgs.length > 0) {
+    reportAdvice.value = aiMsgs[aiMsgs.length - 1].content
+  } else {
+    reportAdvice.value = "暂无详细建议，请先与 AI 医师描述您的症状。"
+  }
+
+  if (chatMessages.value.length > 0) {
+    const firstUserMsg = chatMessages.value.find(m => m.type === 'user')?.content || ""
+    if (firstUserMsg.includes('肚子') || firstUserMsg.includes('胃')) {
+      currentTopic.value = "脾胃失调/腹部不适"
+    } else if (firstUserMsg.includes('头') || firstUserMsg.includes('晕')) {
+      currentTopic.value = "头痛头晕/清阳不升"
+    } else if (firstUserMsg.includes('累') || firstUserMsg.includes('乏')) {
+      currentTopic.value = "气虚倦怠/气血调理"
+    } else if (firstUserMsg.length > 10) {
+      currentTopic.value = firstUserMsg.substring(0, 8) + "..."
+    } else {
+      currentTopic.value = firstUserMsg || "常规养生咨询"
+    }
+  }
+
+  isBambooModalVisible.value = true
+}
+
+const closeBamboo = () => {
+  isBambooModalVisible.value = false
+}
+
+const copyReport = () => {
+  const reportText = `
+【养生建议报告】
+------------------------------
+问诊时间：${currentTime.value}
+问诊主题：${currentTopic.value}
+------------------------------
+【AI 医师调理方案】：
+${reportAdvice.value.replace(/[*#]/g, '')} 
+
+注：本报告由 AI 辅助生成，仅供参考，不替代专业医疗诊断。
+  `.trim();
+
+  navigator.clipboard.writeText(reportText).then(() => {
+    alert('报告已成功复制到剪贴板！');
+  }).catch(err => {
+    console.error('复制失败:', err);
+  });
+};
+
+const downloadReport = async () => {
+  if (!reportContentRef.value) return;
+
+  try {
+    isExporting.value = true;
+    await nextTick(); 
+    await new Promise(resolve => setTimeout(resolve, 300)); 
+
+    const element = reportContentRef.value;
+    
+    const canvas = await html2canvas(element, {
+      scale: 2, 
+      useCORS: true, 
+      backgroundColor: '#F9F6EE', 
+      windowWidth: element.scrollWidth,
+      windowHeight: element.scrollHeight,
+      y: window.scrollY || window.pageYOffset 
+    });
+
+    isExporting.value = false; 
+
+    const imgData = canvas.toDataURL('image/jpeg', 1.0);
+    const pdfWidth = canvas.width;
+    const pdfHeight = canvas.height;
+
+    const pdf = new jsPDF({
+      orientation: 'p', 
+      unit: 'px',       
+      format: [pdfWidth, pdfHeight] 
+    });
+
+    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+
+    const dateObj = new Date();
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    const cleanDateStr = `${year}${month}${day}`;
+
+    pdf.save(`中医养生卷轴_${currentTopic.value}_${cleanDateStr}.pdf`);
+    
+  } catch (error) {
+    console.error('生成卷轴失败:', error);
+    alert('报告生成失败，请稍后再试。');
+    isExporting.value = false; 
+  }
+};
+
+const goToHome = () => router.push('/')
+
+const startVoiceRecognition = () => {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+  if (!SpeechRecognition) {
+    alert('您的浏览器不支持语音输入，请手动输入')
+    return
+  }
+  
+  const recognition = new SpeechRecognition()
+  recognition.lang = 'zh-CN'
+  recognition.interimResults = false
+
+  recognition.onstart = () => { isRecording.value = true }
+  recognition.onresult = (e) => { msgInput.value = e.results[0][0].transcript }
+  recognition.onend = () => { isRecording.value = false }
+  recognition.start()
+}
+</script>
+
+<style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;700&display=swap');
+
+/* === 聊天区域样式 === */
+.ai-bubble {
+  background-color: #F9F6EE;
+  border: 1px solid #D4B996;
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem; 
+  max-width: 85%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  line-height: 1.8; 
+  font-size: 1.15rem; 
+  color: #3C2A21;
+}
+
+.user-bubble {
+  background-color: #F8F5E8;
+  border: 1px solid rgba(166, 124, 82, 0.2);
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+  max-width: 85%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  line-height: 1.8;
+  font-size: 1.15rem; 
+  text-align: left;
+  color: #3C2A21;
+}
+
+.ai-bubble :deep(p) { margin-bottom: 0.85rem; }
+.ai-bubble :deep(p:last-child) { margin-bottom: 0; }
+.ai-bubble :deep(strong) { font-weight: bold; color: #8B4513; }
+.ai-bubble :deep(ul) { list-style-type: disc; margin-left: 1.5rem; margin-bottom: 0.85rem; padding-left: 0.5rem; }
+.ai-bubble :deep(ol) { list-style-type: decimal; margin-left: 1.5rem; margin-bottom: 0.85rem; padding-left: 0.5rem; }
+.ai-bubble :deep(li) { margin-bottom: 0.4rem; }
+.ai-bubble :deep(h1) { font-size: 1.5rem; font-weight: bold; margin-top: 1.2rem; margin-bottom: 0.6rem; color: #3C2A21; }
+.ai-bubble :deep(h2) { font-size: 1.35rem; font-weight: bold; margin-top: 1.2rem; margin-bottom: 0.6rem; color: #3C2A21; }
+.ai-bubble :deep(h3) { font-size: 1.25rem; font-weight: bold; margin-top: 1.2rem; margin-bottom: 0.6rem; color: #3C2A21; }
+
+/* === 竹简弹窗样式 === */
+.bamboo-scroll {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.7);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s;
+}
+
+.bamboo-scroll.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.scroll-content {
+  width: 95%;
+  max-width: 48rem;
+  height: 85vh;
+  background-color: #F9F6EE; 
+  background-image: url('https://www.transparenttextures.com/patterns/aged-paper.png');
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5), inset 0 0 40px rgba(212, 185, 150, 0.2);
+  background-size: auto;
+  background-position: center;
+  padding: 4rem 3rem;
+  transform: scale(0.9);
+  transition: transform 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.custom-scroll::-webkit-scrollbar { width: 6px; }
+.custom-scroll::-webkit-scrollbar-track { background: transparent; }
+.custom-scroll::-webkit-scrollbar-thumb { background-color: #D4B996; border-radius: 9999px; }
+.custom-scroll::-webkit-scrollbar-thumb:hover { background-color: #8B4513; }
+
+/* === 报告单内部大字号排版 === */
+.report-markdown {
+  font-size: 1.25rem;
+  line-height: 1.9;
+  color: #3C2A21;
+}
+.report-markdown :deep(p) { margin-bottom: 1.25rem; }
+
+.report-markdown :deep(strong) { 
+  font-weight: bold !important; 
+  color: #8B4513 !important; 
+  background-color: transparent !important; 
+  padding: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.report-markdown :deep(ul),
+.report-markdown :deep(ol) { 
+  list-style-type: none !important; 
+  padding-left: 0 !important;
+  margin-left: 0 !important;
+  margin-bottom: 1.25rem; 
+  counter-reset: ol-counter; 
+}
+
+.report-markdown :deep(li) { 
+  position: relative !important;
+  padding-left: 1.8rem !important; 
+  margin-bottom: 0.8rem; 
+}
+
+.report-markdown :deep(ul li::before) {
+  content: "•";
+  position: absolute;
+  left: 0.5rem;
+  top: 0;
+  color: #8B4513; 
+  font-weight: bold;
+}
+
+.report-markdown :deep(ol li::before) {
+  counter-increment: ol-counter; 
+  content: counter(ol-counter) "."; 
+  position: absolute;
+  left: 0.2rem;
+  top: 0;
+  color: #8B4513; 
+  font-weight: bold;
+}
+
+.report-markdown :deep(h1) { font-size: 1.75rem; font-weight: bold; color: #5C3A21; margin-top: 1.8rem; margin-bottom: 1rem; }
+.report-markdown :deep(h2) { font-size: 1.5rem; font-weight: bold; color: #5C3A21; margin-top: 1.6rem; margin-bottom: 0.8rem; border-bottom: 1px dashed #D4B996; padding-bottom: 0.4rem; }
+.report-markdown :deep(h3) { font-size: 1.35rem; font-weight: bold; color: #5C3A21; margin-top: 1.4rem; margin-bottom: 0.8rem; }
+
+/* ⚡️ 导出 PDF 时专用的修复样式 */
+.export-mode,
+.export-mode * {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+/* ⚡️ 彻底解决 FontAwesome 图标截图偏位：改用绝对定位暴力居中 */
+.export-mode .icon-circle {
+  position: relative !important;
+  display: block !important;
+}
+
+.export-mode .icon-circle i {
+  position: absolute !important;
+  top: 50% !important;
+  left: 0 !important;
+  width: 100% !important;
+  text-align: center !important;
+  transform: translateY(-50%) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1 !important;
+}
 </style>
