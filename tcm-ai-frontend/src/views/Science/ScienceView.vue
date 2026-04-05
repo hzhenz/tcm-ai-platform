@@ -231,16 +231,28 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import HumanBody3D from '@/components/HumanBody3D.vue'
 
 const router = useRouter()
 const activeTab = ref('meridian')
 
+const STAT_KEY = 'scienceVisitCount'
+
+const bumpVisitCount = () => {
+  const current = parseInt(localStorage.getItem(STAT_KEY) || '0', 10)
+  const next = Number.isFinite(current) ? current + 1 : 1
+  localStorage.setItem(STAT_KEY, String(next))
+}
+
 const goBack = () => {
   router.push('/')
 }
+
+onMounted(() => {
+  bumpVisitCount()
+})
 </script>
 
 <style scoped>

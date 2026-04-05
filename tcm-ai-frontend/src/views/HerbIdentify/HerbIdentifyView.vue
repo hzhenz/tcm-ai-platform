@@ -91,6 +91,14 @@ const result = reactive({
 	localPrice: 35,
 })
 
+const STAT_KEY = 'herbIdentifyCount'
+
+const bumpIdentifyCount = () => {
+	const current = parseInt(localStorage.getItem(STAT_KEY) || '0', 10)
+	const next = Number.isFinite(current) ? current + 1 : 1
+	localStorage.setItem(STAT_KEY, String(next))
+}
+
 const localPrices = ref([
 	{ name: '长沙市中医医院', area: '天心区', gancao: '34元/公斤', danggui: '68元/公斤', huangqi: '55元/公斤', update: '今日 09:20' },
 	{ name: '百草堂大药房', area: '岳麓区', gancao: '33元/公斤', danggui: '65元/公斤', huangqi: '52元/公斤', update: '今日 10:10' },
@@ -127,6 +135,7 @@ async function onFileChange(e) {
 		// 模拟异步识别，可替换为实际上传接口或本地推理函数
 		const res = await fakeIdentify(file)
 		Object.assign(result, res)
+		bumpIdentifyCount()
 	} catch (err) {
 		console.error(err)
 		// 保持默认结果或显示错误

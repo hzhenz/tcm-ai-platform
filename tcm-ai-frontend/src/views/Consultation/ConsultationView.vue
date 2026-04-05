@@ -158,12 +158,13 @@
 
 <script setup>
 import { ref, nextTick, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 
 const router = useRouter()
+const route = useRoute()
 const JAVA_API_BASE_URL = (import.meta.env.VITE_JAVA_API_BASE_URL || 'http://localhost:8080').replace(/\/$/, '')
 const PYTHON_AI_BASE_URL = (import.meta.env.VITE_PYTHON_AI_BASE_URL || 'http://localhost:5000').replace(/\/$/, '')
 const TOKEN_KEY = 'tcm_token'
@@ -190,6 +191,14 @@ const renderMarkdown = (text) => {
 }
 
 const historyList = ref([])
+
+const FOCUS_TOPIC_MAP = {
+  heart: '心系统专项评测',
+  spleen: '脾系统专项评测',
+  lung: '肺系统专项评测',
+  kidney: '肾系统专项评测',
+  liver: '肝系统专项评测'
+}
 
 const getToken = () => localStorage.getItem(TOKEN_KEY) || ''
 
@@ -236,12 +245,24 @@ const fetchHistory = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (!getToken()) {
     router.push('/login')
     return
   }
-  fetchHistory()
+  await fetchHistory()
+
+  // 如果从个人中心带着 id 跳转过来，尝试自动加载对应的历史记录
+  const targetId = route.query.id
+  if (targetId) {
+    const targetItem = historyList.value.find(item => String(item.id) === String(targetId))
+    if (targetItem) {
+      loadHistory(targetItem)
+      return
+    }
+  }
+
+  await tryStartFocusedAssessment()
 })
 
 // ==========================================
@@ -337,8 +358,8 @@ const scrollToBottom = async () => {
 // 🌟 4. 发送消息给 AI (找 Python: 5000)
 // ⚡️ 修复：去 5000 端口找 AI 老中医
 // ==========================================
-const sendMsg = async () => {
-  const inputText = msgInput.value.trim()
+const sendMsg = async (forcedText = '') => {
+  const inputText = (typeof forcedText === 'string' && forcedText.trim() ? forcedText : msgInput.value).trim()
   if (!inputText) return
   
   if (currentTopic.value === '新问诊') {
@@ -418,6 +439,26 @@ const generateSyndrome = () => {
   }
 
   isBambooModalVisible.value = true
+}
+
+const tryStartFocusedAssessment = async () => {
+  const presetPrompt = typeof route.query.presetPrompt === 'string' ? route.query.presetPrompt.trim() : ''
+  if (!presetPrompt) return
+
+  const focus = typeof route.query.focus === 'string' ? route.query.focus : ''
+  const autoSend = String(route.query.autoSend || '') === '1'
+
+  startNewConsultation()
+  currentTopic.value = FOCUS_TOPIC_MAP[focus] || '专项问诊评测'
+
+  if (autoSend) {
+    await sendMsg(presetPrompt)
+  } else {
+    msgInput.value = presetPrompt
+    scrollToBottom()
+  }
+
+  router.replace({ path: '/consultation' })
 }
 
 const closeBamboo = () => {

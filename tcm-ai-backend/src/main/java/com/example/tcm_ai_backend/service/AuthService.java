@@ -49,7 +49,7 @@ public class AuthService {
         AppUser saved = appUserRepository.save(user);
         String token = jwtService.generateToken(new AppUserPrincipal(saved.getId(), saved.getUsername(), saved.getPassword()));
 
-        return new AuthResponse(token, saved.getId(), saved.getUsername());
+        return new AuthResponse(token, saved.getId(), saved.getUsername(), saved.getCreateTime());
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -61,6 +61,6 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalArgumentException("用户名或密码错误"));
 
         String token = jwtService.generateToken(new AppUserPrincipal(user.getId(), user.getUsername(), user.getPassword()));
-        return new AuthResponse(token, user.getId(), user.getUsername());
+        return new AuthResponse(token, user.getId(), user.getUsername(), user.getCreateTime());
     }
 }

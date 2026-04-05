@@ -31,7 +31,7 @@
         </button>
 
         <div v-if="userMenuOpen" class="user-dropdown">
-          <button class="menu-item" @click="goConsultation">进入问诊</button>
+          <button class="menu-item" @click="goPersonalCenter">个人中心</button>
           <button class="menu-item danger" @click="logout">退出登录</button>
         </div>
       </div>
@@ -55,7 +55,7 @@ const navItems = [
   { id: 'home', label: '首 页' },
   { id: 'function', label: '核心功能' },
   { id: 'local', label: '本地服务' },
-  { id: 'user', label: '用户中心' }
+  { id: 'user', label: '加入我们' }
 ]
 
 const emit = defineEmits(['section-change', 'nav-action'])
@@ -137,9 +137,9 @@ const toggleUserMenu = () => {
   userMenuOpen.value = !userMenuOpen.value
 }
 
-const goConsultation = () => {
+const goPersonalCenter = () => {
   userMenuOpen.value = false
-  router.push('/consultation')
+  router.push('/profile')
 }
 
 const logout = () => {

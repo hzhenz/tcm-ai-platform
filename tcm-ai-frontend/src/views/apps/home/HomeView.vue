@@ -184,7 +184,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('scroll', handleScroll)
-  window.__homeLeftBefore = true
 })
 </script>
 

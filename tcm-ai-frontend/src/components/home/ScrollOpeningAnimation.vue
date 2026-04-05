@@ -20,26 +20,30 @@ import { ref, onMounted } from 'vue'
 const isVisible = ref(true)
 const opacity = ref(1)
 const isPageShow = ref(false)
+const OPENING_PLAYED_KEY = 'tcm_home_opening_played'
 
 const emit = defineEmits(['animation-complete'])
 
 onMounted(() => {
-  const isReturning = window.__homeLeftBefore
-  
-  if (!isReturning) {
-    setTimeout(() => {
-      opacity.value = 0 
-      setTimeout(() => {
-        isVisible.value = false 
-        isPageShow.value = true
-        emit('animation-complete')
-      }, 800)
-    }, 2200)
-  } else {
+  const hasPlayed = localStorage.getItem(OPENING_PLAYED_KEY) === '1'
+
+  if (hasPlayed) {
     isVisible.value = false
     isPageShow.value = true
     emit('animation-complete')
+    return
   }
+
+  // 先落标记，避免动画期间发生重挂载导致重复拉帷幕
+  localStorage.setItem(OPENING_PLAYED_KEY, '1')
+  setTimeout(() => {
+    opacity.value = 0
+    setTimeout(() => {
+      isVisible.value = false
+      isPageShow.value = true
+      emit('animation-complete')
+    }, 800)
+  }, 2200)
 })
 </script>
 

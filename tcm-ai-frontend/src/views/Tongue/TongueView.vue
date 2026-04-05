@@ -144,9 +144,11 @@ const showAnalysis = ref(false)
 const diagnosis = ref('湿热证候 87%')
 const dietSuggestion = ref('薏米红豆粥、冬瓜海带汤')
 const acupointSuggestion = ref('足三里、阴陵泉（每日2次）')
+const REPORT_HISTORY_KEY = 'tongueReportHistory'
 
 // 打卡数据
 const checkInDays = ref(JSON.parse(localStorage.getItem('tongueCheckIn') || '[]'))
+const reportHistory = ref(JSON.parse(localStorage.getItem(REPORT_HISTORY_KEY) || '[]'))
 
 // 报告模态框
 const showReportModal = ref(false)
@@ -155,6 +157,10 @@ const reportDate = ref('')
 // --- 打卡逻辑 ---
 const saveCheckIn = () => {
   localStorage.setItem('tongueCheckIn', JSON.stringify(checkInDays.value))
+}
+
+const saveReportHistory = () => {
+  localStorage.setItem(REPORT_HISTORY_KEY, JSON.stringify(reportHistory.value))
 }
 
 const toggleCheckIn = (day) => {
@@ -174,12 +180,12 @@ const autoCheckIn = () => {
       checkInDays.value.push(day)
       saveCheckIn()
       alert(`🎉 恭喜完成第 ${day} 天舌疗打卡！继续坚持～`)
-      return true
+      return day
     }
   }
   // 全部已打卡
   alert('您已完成全部7天打卡！非常棒！')
-  return false
+  return null
 }
 
 // --- 摄像头控制 ---
@@ -315,9 +321,24 @@ const generateReport = () => {
   }
 
   // 自动打卡
-  autoCheckIn()
+  const checkedDay = autoCheckIn()
 
-  reportDate.value = new Date().toLocaleString()
+  const nowText = new Date().toLocaleString()
+  reportDate.value = nowText
+
+  // 保存真实舌诊报告到本地历史，供个人中心聚合展示
+  const entry = {
+    id: Date.now(),
+    reportDate: nowText,
+    day: checkedDay,
+    diagnosis: diagnosis.value,
+    dietSuggestion: dietSuggestion.value,
+    acupointSuggestion: acupointSuggestion.value,
+    summary: `${diagnosis.value}；食疗建议：${dietSuggestion.value}`
+  }
+  reportHistory.value = [entry, ...reportHistory.value].slice(0, 30)
+  saveReportHistory()
+
   showReportModal.value = true
 }
 
