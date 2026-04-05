@@ -8,6 +8,10 @@ const password = ref('')
 const loading = ref(false)
 const JAVA_API_BASE_URL = (import.meta.env.VITE_JAVA_API_BASE_URL || 'http://localhost:8080').replace(/\/$/, '')
 
+const goHome = () => {
+	router.push('/')
+}
+
 const submit = async () => {
 	if (!username.value.trim() || !password.value.trim()) {
 		alert('请输入用户名和密码')
@@ -32,7 +36,13 @@ const submit = async () => {
 				userId: result.data.userId,
 				username: result.data.username
 			}))
-			router.push('/consultation')
+			const redirect = router.currentRoute.value.query.redirect
+			if (typeof redirect === 'string' && redirect.startsWith('/')) {
+				router.push(redirect)
+				return
+			}
+
+			router.push('/')
 			return
 		}
 
@@ -56,6 +66,7 @@ const submit = async () => {
 				还没有账号？
 				<a href="/register">去注册</a>
 			</p>
+			<button type="button" class="browse-btn" @click="goHome">随便逛逛</button>
 		</div>
 	</div>
 </template>
@@ -116,5 +127,18 @@ button:disabled {
 
 a {
 	color: #8b5e34;
+}
+
+.browse-btn {
+	height: 40px;
+	border: 1px solid #d6c5ac;
+	border-radius: 8px;
+	background: #fff;
+	color: #8b5e34;
+	cursor: pointer;
+}
+
+.browse-btn:hover {
+	background: #f9f2e8;
 }
 </style>

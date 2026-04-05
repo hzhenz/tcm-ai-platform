@@ -101,7 +101,7 @@ const handleNavAction = ({ type, path }) => {
   } else if (type === 'login') {
     router.push('/login')
   } else if (type === 'register') {
-    router.push('/login')
+    router.push('/register')
   }
 }
 
@@ -109,7 +109,7 @@ const handleAction = ({ type }) => {
   if (type === 'login') {
     router.push('/login')
   } else if (type === 'register') {
-    router.push('/login')
+    router.push('/register')
   }
 }
 

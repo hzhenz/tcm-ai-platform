@@ -58,12 +58,26 @@ router.beforeEach((to, from, next) => {
   const requiresAuth = !publicPaths.includes(to.path)
 
   if (requiresAuth && !token) {
-    next('/login')
+    next({
+      path: '/login',
+      query: { redirect: to.fullPath }
+    })
     return
   }
 
   if ((to.path === '/login' || to.path === '/register') && token) {
-    next('/consultation')
+    const redirectTarget = typeof to.query.redirect === 'string' ? to.query.redirect : ''
+    if (redirectTarget && !['/login', '/register'].includes(redirectTarget)) {
+      next(redirectTarget)
+      return
+    }
+
+    // 已登录时再次点“登录/注册”不再跳问诊，保持在当前页面（默认首页）
+    if (from && from.path && from.path !== '/login' && from.path !== '/register') {
+      next(from.fullPath)
+      return
+    }
+    next('/')
     return
   }
 
