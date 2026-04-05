@@ -1,26 +1,63 @@
+-- tcm-ai-platform 旧库迁移脚本（老版本 -> 当前用户体系）
+-- 适用：已存在 user/consultation_log 老表的情况
+
 USE tcm_ai;
 
--- 1. 创建用户表 (虽然还没做登录，但问诊记录需要知道是谁查的)
-CREATE TABLE IF NOT EXISTS `user` (
+-- 1) 老 user 表重命名为 app_user（若已是 app_user 则跳过）
+SET @has_user := (
+  SELECT COUNT(*)
+  FROM information_schema.tables
+  WHERE table_schema = DATABASE() AND table_name = 'user'
+);
+
+SET @has_app_user := (
+  SELECT COUNT(*)
+  FROM information_schema.tables
+  WHERE table_schema = DATABASE() AND table_name = 'app_user'
+);
+
+SET @sql := IF(@has_user > 0 AND @has_app_user = 0,
+  'RENAME TABLE `user` TO `app_user`',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- 2) 若 app_user 不存在，则补建
+CREATE TABLE IF NOT EXISTS `app_user` (
   `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
   `username` VARCHAR(50) NOT NULL UNIQUE COMMENT '用户名',
-  `password` VARCHAR(100) NOT NULL COMMENT '密码',
-  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
+  `password` VARCHAR(100) NOT NULL COMMENT 'BCrypt 哈希密码',
+  `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '注册时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='平台用户表';
 
--- 2. 创建问诊记录表 (带有了用于左侧列表展示的 title 字段)
-CREATE TABLE IF NOT EXISTS `consultation_log` (
-  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
-  `user_id` BIGINT NOT NULL COMMENT '用户ID',
-  `title` VARCHAR(100) NOT NULL COMMENT '问诊主题',
-  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '问诊时间'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='问诊记录表';
+-- 3) consultation_log 补齐 messages 列
+ALTER TABLE `consultation_log`
+  ADD COLUMN IF NOT EXISTS `messages` TEXT COMMENT '聊天内容(JSON字符串)' AFTER `title`;
 
--- 3. 插入测试数据 (极其关键！先造一点假数据，等下我们用 Java 查出来)
-INSERT IGNORE INTO `user` (`id`, `username`, `password`) VALUES (1, '测试用户', '123456');
+-- 4) 补充索引
+ALTER TABLE `consultation_log`
+  ADD INDEX IF NOT EXISTS `idx_consultation_user_time` (`user_id`, `create_time`);
 
-INSERT INTO `consultation_log` (`user_id`, `title`, `create_time`) VALUES 
-(1, '头晕、乏力伴随失眠', '2026-04-03 14:30:00'),
-(1, '脾胃虚弱，食欲不振', '2026-04-01 09:15:00'),
-(1, '喜欢睡觉，不喜欢动', '2026-04-01 09:15:00'),
-(1, '春季养肝咨询记录', '2026-03-28 16:45:00');
+-- 5) 外键（如已存在同名外键将自动忽略）
+SET @has_fk := (
+  SELECT COUNT(*)
+  FROM information_schema.table_constraints
+  WHERE table_schema = DATABASE()
+    AND table_name = 'consultation_log'
+    AND constraint_type = 'FOREIGN KEY'
+    AND constraint_name = 'fk_consultation_app_user'
+);
+
+SET @sql_fk := IF(@has_fk = 0,
+  'ALTER TABLE `consultation_log` ADD CONSTRAINT `fk_consultation_app_user` FOREIGN KEY (`user_id`) REFERENCES `app_user` (`id`) ON DELETE CASCADE',
+  'SELECT 1'
+);
+PREPARE stmt_fk FROM @sql_fk;
+EXECUTE stmt_fk;
+DEALLOCATE PREPARE stmt_fk;
+
+-- 说明：
+-- 当前登录使用 BCrypt 哈希密码。老表中若是明文密码，建议让用户重新注册，
+-- 或按业务规则离线改写为 BCrypt 哈希。

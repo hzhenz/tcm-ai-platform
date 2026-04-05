@@ -2,6 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 // 引入首页组件 (注意核对一下你的实际路径，如果 HomeView 在 apps/home/ 下，请保持你原来的相对路径)
 import HomeView from '../views/apps/home/HomeView.vue'
 
+const TOKEN_KEY = 'tcm_token'
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -37,7 +39,35 @@ const router = createRouter({
       name: 'science',
       component: () => import('../views/Science/ScienceView.vue')
     },
+    {
+      path: '/login',
+      name: 'login',
+      component: () => import('../views/apps/LoginView.vue')
+    },
+    {
+      path: '/register',
+      name: 'register',
+      component: () => import('../views/apps/RegisterView.vue')
+    }
   ]
+})
+
+router.beforeEach((to, from, next) => {
+  const token = localStorage.getItem(TOKEN_KEY)
+  const publicPaths = ['/', '/login', '/register']
+  const requiresAuth = !publicPaths.includes(to.path)
+
+  if (requiresAuth && !token) {
+    next('/login')
+    return
+  }
+
+  if ((to.path === '/login' || to.path === '/register') && token) {
+    next('/consultation')
+    return
+  }
+
+  next()
 })
 
 // 增加一个路由跳转后自动回到顶部的细节，体验更好

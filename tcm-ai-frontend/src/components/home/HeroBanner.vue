@@ -3,15 +3,14 @@
     <canvas ref="particleCanvas" class="hero-canvas"></canvas>
     <div class="banner-bg"></div>
     <div class="banner-content reveal-item">
-      <div class="subtitle">AI辅助中医平台</div>
+      <div class="subtitle">中医智能管家</div>
       <h1>中医四诊 · 辨证调理</h1>
       <p>望闻问切，四诊合参，由表及里。<br>结合现代人工智能，察知全身气血阴阳变化，为您提供精准的中医调理思路。</p>
       <div class="btn-group">
-        <button class="btn btn-primary" @click="emit('navigate', '/tongue')">
-          <span>AI舌诊分析</span>
+        <button class="btn btn-primary btn-start" @click="scrollToNext">
+          <span>开始体验</span>
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
         </button>
-        <button class="btn btn-outline" @click="emit('navigate', '/herb')">中药智能识别</button>
       </div>
     </div>
   </section>
@@ -24,6 +23,19 @@ const particleCanvas = ref(null)
 let ctx, width, height, particles = [], animationId
 
 const emit = defineEmits(['navigate'])
+
+const scrollToNext = () => {
+  const functionSection = document.getElementById('function')
+  if (functionSection) {
+    const headerOffset = 80
+    const elementPosition = functionSection.getBoundingClientRect().top
+    const offsetPosition = elementPosition + window.pageYOffset - headerOffset
+    window.scrollTo({
+      top: offsetPosition,
+      behavior: 'smooth'
+    })
+  }
+}
 
 const initCanvas = () => {
   const canvas = particleCanvas.value
@@ -198,6 +210,12 @@ onBeforeUnmount(() => {
   background: #2A4039;
   transform: translateY(-2px);
   box-shadow: 0 8px 20px rgba(28, 43, 38, 0.2);
+}
+
+.btn-start {
+  padding: 16px 40px;
+  font-size: 18px;
+  border-radius: 50px;
 }
 
 .btn-outline {

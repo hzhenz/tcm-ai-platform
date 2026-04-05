@@ -10,11 +10,6 @@
         @section-change="scrollToSection"
         @nav-action="handleNavAction"
       />
-      
-      <!-- 资讯条 -->
-      <div id="home" data-aos="fade-down" data-aos-duration="1000">
-        <InfoBar />
-      </div>
 
       <!-- Hero Banner -->
       <div data-aos="fade-up" data-aos-duration="1200" data-aos-delay="200">
@@ -64,7 +59,6 @@ import { useRouter } from 'vue-router'
 
 import ScrollOpeningAnimation from '@/components/home/ScrollOpeningAnimation.vue'
 import HomeHeader from '@/components/home/HomeHeader.vue'
-import InfoBar from '@/components/home/InfoBar.vue'
 import HeroBanner from '@/components/home/HeroBanner.vue'
 import FunctionGrid from '@/components/home/FunctionGrid.vue'
 import LocalService from '@/components/home/LocalService.vue'
@@ -105,13 +99,17 @@ const handleNavAction = ({ type, path }) => {
   if (type === 'navigate' && path) {
     goTo(path)
   } else if (type === 'login') {
-    showMessage('🎭 演示模式 - 系统开发中 🎭')
+    router.push('/login')
+  } else if (type === 'register') {
+    router.push('/login')
   }
 }
 
 const handleAction = ({ type }) => {
   if (type === 'login') {
-    showMessage('🎭 演示模式 - 系统开发中 🎭')
+    router.push('/login')
+  } else if (type === 'register') {
+    router.push('/login')
   }
 }
 

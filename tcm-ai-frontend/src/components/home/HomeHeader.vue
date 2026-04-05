@@ -20,16 +20,36 @@
           {{ item.label }}
         </a>
       </div>
-      <button class="login-btn" @click="handleLoginClick">登录 / 注册</button>
+
+      <button v-if="!isLoggedIn" class="login-btn" @click="handleLoginClick">登录 / 注册</button>
+
+      <div v-else ref="userMenuRef" class="user-menu-wrap">
+        <button class="user-btn" @click="toggleUserMenu">
+          <span class="avatar">{{ userInitial }}</span>
+          <span class="username">{{ username }}</span>
+          <span class="arrow" :class="{ open: userMenuOpen }">▾</span>
+        </button>
+
+        <div v-if="userMenuOpen" class="user-dropdown">
+          <button class="menu-item" @click="goConsultation">进入问诊</button>
+          <button class="menu-item danger" @click="logout">退出登录</button>
+        </div>
+      </div>
     </div>
   </header>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 
 const isScrolled = ref(false)
 const activeSection = ref('home')
+const isLoggedIn = ref(false)
+const username = ref('')
+const userMenuOpen = ref(false)
+const userMenuRef = ref(null)
+const router = useRouter()
 
 const navItems = [
   { id: 'home', label: '首 页' },
@@ -39,6 +59,32 @@ const navItems = [
 ]
 
 const emit = defineEmits(['section-change', 'nav-action'])
+
+const userInitial = computed(() => {
+  const name = username.value?.trim()
+  if (!name) {
+    return 'U'
+  }
+  return name[0].toUpperCase()
+})
+
+const syncAuthState = () => {
+  const token = localStorage.getItem('tcm_token')
+  const userRaw = localStorage.getItem('tcm_user')
+  isLoggedIn.value = !!token
+
+  if (!userRaw) {
+    username.value = '用户'
+    return
+  }
+
+  try {
+    const user = JSON.parse(userRaw)
+    username.value = user?.username || '用户'
+  } catch (e) {
+    username.value = '用户'
+  }
+}
 
 const handleScroll = () => {
   isScrolled.value = window.scrollY > 50
@@ -87,12 +133,46 @@ const handleLoginClick = () => {
   emit('nav-action', { type: 'login' })
 }
 
+const toggleUserMenu = () => {
+  userMenuOpen.value = !userMenuOpen.value
+}
+
+const goConsultation = () => {
+  userMenuOpen.value = false
+  router.push('/consultation')
+}
+
+const logout = () => {
+  localStorage.removeItem('tcm_token')
+  localStorage.removeItem('tcm_user')
+  userMenuOpen.value = false
+  syncAuthState()
+  router.push('/login')
+}
+
+const closeUserMenuOnOutsideClick = (event) => {
+  if (!userMenuOpen.value || !userMenuRef.value) {
+    return
+  }
+
+  if (!userMenuRef.value.contains(event.target)) {
+    userMenuOpen.value = false
+  }
+}
+
 onMounted(() => {
+  syncAuthState()
   window.addEventListener('scroll', handleScroll)
+  window.addEventListener('storage', syncAuthState)
+  window.addEventListener('focus', syncAuthState)
+  document.addEventListener('click', closeUserMenuOnOutsideClick)
 })
 
 onUnmounted(() => {
   window.removeEventListener('scroll', handleScroll)
+  window.removeEventListener('storage', syncAuthState)
+  window.removeEventListener('focus', syncAuthState)
+  document.removeEventListener('click', closeUserMenuOnOutsideClick)
 })
 </script>
 
@@ -188,6 +268,91 @@ onUnmounted(() => {
   background: #1C2B26;
   color: #fff;
   box-shadow: 0 4px 15px rgba(28, 43, 38, 0.2);
+}
+
+.user-menu-wrap {
+  position: relative;
+}
+
+.user-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 8px;
+  border: 1px solid #d8c6aa;
+  border-radius: 999px;
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.user-btn:hover {
+  border-color: #1C2B26;
+}
+
+.avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #1C2B26;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.username {
+  max-width: 90px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #1C2B26;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.arrow {
+  font-size: 12px;
+  color: #6a6a6a;
+  transition: transform 0.2s ease;
+}
+
+.arrow.open {
+  transform: rotate(180deg);
+}
+
+.user-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 140px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  z-index: 10001;
+}
+
+.menu-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: #2d2d2d;
+  cursor: pointer;
+}
+
+.menu-item:hover {
+  background: #f7f3eb;
+}
+
+.menu-item.danger {
+  color: #9f2f2f;
 }
 
 .container {

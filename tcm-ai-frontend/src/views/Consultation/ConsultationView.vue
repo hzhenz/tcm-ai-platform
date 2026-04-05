@@ -164,6 +164,9 @@ import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 
 const router = useRouter()
+const JAVA_API_BASE_URL = (import.meta.env.VITE_JAVA_API_BASE_URL || 'http://localhost:8080').replace(/\/$/, '')
+const PYTHON_AI_BASE_URL = (import.meta.env.VITE_PYTHON_AI_BASE_URL || 'http://localhost:5000').replace(/\/$/, '')
+const TOKEN_KEY = 'tcm_token'
 const currentId = ref(null) 
 const reportAdvice = ref('')
 
@@ -188,9 +191,37 @@ const renderMarkdown = (text) => {
 
 const historyList = ref([])
 
+const getToken = () => localStorage.getItem(TOKEN_KEY) || ''
+
+const buildHeaders = (withJson = true) => {
+  const headers = {}
+  if (withJson) headers['Content-Type'] = 'application/json'
+  const token = getToken()
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+  return headers
+}
+
+const handleUnauthorized = () => {
+  localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem('tcm_user')
+  alert('登录状态已过期，请重新登录')
+  router.push('/login')
+}
+
+// ==========================================
+// 1. 获取历史记录 (找 Java: 8080)
+// ==========================================
 const fetchHistory = async () => {
   try {
-    const response = await fetch('http://localhost:8080/api/consultation/history')
+    const response = await fetch(`${JAVA_API_BASE_URL}/api/consultation/history`, {
+      headers: buildHeaders(false)
+    })
+    if (response.status === 401) {
+      handleUnauthorized()
+      return
+    }
     const result = await response.json()
     if (result.code === 200) {
       historyList.value = result.data.map(item => ({
@@ -206,20 +237,32 @@ const fetchHistory = async () => {
 }
 
 onMounted(() => {
+  if (!getToken()) {
+    router.push('/login')
+    return
+  }
   fetchHistory()
 })
 
+// ==========================================
+// 2. 同步保存到数据库 (找 Java: 8080)
+// ⚡️ 修复：恢复成保存数据的逻辑
+// ==========================================
 const syncToDb = async () => {
   try {
-    const response = await fetch('http://localhost:8080/api/consultation/save', {
+    const response = await fetch(`${JAVA_API_BASE_URL}/api/consultation/save`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildHeaders(),
       body: JSON.stringify({
         id: currentId.value,
         title: currentTopic.value,
         messages: JSON.stringify(chatMessages.value)
       })
     })
+    if (response.status === 401) {
+      handleUnauthorized()
+      return
+    }
     const result = await response.json()
     if (result.code === 200) {
       if (!currentId.value) {
@@ -232,6 +275,9 @@ const syncToDb = async () => {
   }
 }
 
+// ==========================================
+// 3. 基础功能 (增删改查页面交互)
+// ==========================================
 const startNewConsultation = () => {
   currentId.value = null 
   chatMessages.value = [ {...initialGreeting} ]
@@ -256,9 +302,14 @@ const loadHistory = (item) => {
 const deleteHistory = async (index, id) => {
   if(confirm('确认删除这条问诊记录吗？数据将永久丢失。')) {
     try {
-      const response = await fetch(`http://localhost:8080/api/consultation/delete/${id}`, {
-        method: 'DELETE'
+      const response = await fetch(`${JAVA_API_BASE_URL}/api/consultation/delete/${id}`, {
+        method: 'DELETE',
+        headers: buildHeaders(false)
       })
+      if (response.status === 401) {
+        handleUnauthorized()
+        return
+      }
       const result = await response.json()
       if (result.code === 200) {
         historyList.value.splice(index, 1)
@@ -282,30 +333,39 @@ const scrollToBottom = async () => {
   }
 }
 
+// ==========================================
+// 🌟 4. 发送消息给 AI (找 Python: 5000)
+// ⚡️ 修复：去 5000 端口找 AI 老中医
+// ==========================================
 const sendMsg = async () => {
-  const content = msgInput.value.trim()
-  if (!content) return
+  const inputText = msgInput.value.trim()
+  if (!inputText) return
   
   if (currentTopic.value === '新问诊') {
-    currentTopic.value = content.length > 10 ? content.substring(0, 10) + '...' : content
+    currentTopic.value = inputText.length > 10 ? inputText.substring(0, 10) + '...' : inputText
   }
 
-  chatMessages.value.push({ type: 'user', content: content })
+  // 1. 用户消息上屏
+  chatMessages.value.push({ type: 'user', content: inputText })
   msgInput.value = ''
   scrollToBottom()
+  
+  // 2. 先存一次数据库
   await syncToDb()
 
+  // 3. 显示思考中
   const thinkingMsg = { type: 'ai', content: '<i class="fa-solid fa-spinner fa-spin mr-2"></i>老中医正在翻阅古籍知识库...' }
   chatMessages.value.push(thinkingMsg)
   const thinkingIndex = chatMessages.value.length - 1
   scrollToBottom()
 
   try {
-    const response = await fetch('http://localhost:8080/api/consultation/ask-ai', {
+    // ⚡️ 核心修改：这里请求 Python 的 5000 端口
+    const response = await fetch(`${PYTHON_AI_BASE_URL}/api/ai/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        content: content,
+        content: inputText,
         history: chatMessages.value.slice(0, -1).map(m => ({
           role: m.type === 'ai' ? 'assistant' : 'user',
           content: m.content
@@ -315,6 +375,7 @@ const sendMsg = async () => {
     
     const result = await response.json()
     if (result.code === 200) {
+      // 4. 获取回复，上屏，再存一次数据库
       chatMessages.value[thinkingIndex].content = result.data
       isReasonTreeVisible.value = true 
       scrollToBottom()
@@ -327,6 +388,9 @@ const sendMsg = async () => {
   }
 }
 
+// ==========================================
+// 5. 其他辅助功能 (生成报告、下载等)
+// ==========================================
 const generateSyndrome = () => {
   const now = new Date()
   currentTime.value = `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`
@@ -407,7 +471,7 @@ const downloadReport = async () => {
 
     const pdf = new jsPDF({
       orientation: 'p', 
-      unit: 'px',       
+      unit: 'px',      
       format: [pdfWidth, pdfHeight] 
     });
 

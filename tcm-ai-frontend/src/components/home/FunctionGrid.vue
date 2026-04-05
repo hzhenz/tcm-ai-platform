@@ -247,6 +247,8 @@ const emit = defineEmits(['navigate'])
   position: relative;
   z-index: 2;
   flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .bento-card h3 {
@@ -262,8 +264,7 @@ const emit = defineEmits(['navigate'])
   color: #555555;
   font-size: 14.5px;
   line-height: 1.7;
-  margin-bottom: auto;
-  padding-bottom: 24px;
+  margin-bottom: 20px;
   position: relative;
   z-index: 2;
 }
@@ -278,6 +279,7 @@ const emit = defineEmits(['navigate'])
   position: relative;
   z-index: 2;
   transition: gap 0.3s ease;
+  margin-top: auto; /* 推到底部 */
 }
 
 .bento-card:hover .card-action {
@@ -372,23 +374,6 @@ const emit = defineEmits(['navigate'])
   transform: rotate(-15deg);
   pointer-events: none;
   filter: grayscale(1);
-}
-
-.card-action {
-  position: absolute;
-  bottom: 30px;
-  left: 30px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #C2A878;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: gap 0.3s ease;
-}
-
-.function-card:hover .card-action {
-  gap: 12px;
 }
 
 .reveal-item {

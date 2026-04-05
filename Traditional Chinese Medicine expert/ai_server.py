@@ -14,7 +14,7 @@ embeddings = HuggingFaceEmbeddings(model_name="shibing624/text2vec-base-chinese"
 vector_db = Chroma(persist_directory="./tcm_chroma_db", embedding_function=embeddings)
 
 client = OpenAI(
-    api_key="sk-07d961c6aa0747cab3d0376910a8a995",
+    api_key="sk-a567cf2d96074f4e92fafbc71225cb5e",
     base_url="https://api.deepseek.com"
 )
 
