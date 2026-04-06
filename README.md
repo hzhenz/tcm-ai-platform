@@ -1,19 +1,19 @@
 # TCM-AI 平台架构文档（概览版）
 
-更新时间：2026-04-06
+更新时间：2026-04-06（最终复扫）
 
 ## 文档定位
 
-本文件用于快速理解项目架构，面向 5-10 分钟阅读。
+本文件用于 5-10 分钟快速理解当前项目的真实架构与联调状态。
 
 1. 概览版：README.md（本文件）
-2. 详细版：docs/ARCHITECTURE.md（全项目扫描与分析报告）
+2. 详细版：docs/ARCHITECTURE.md（完整扫描分析）
 
 ---
 
 ## 1. 系统全景
 
-仓库由 4 个核心子系统组成：
+当前仓库由 4 个核心子系统组成：
 
 1. tcm-ai-frontend（Vue 3 前端）
 2. tcm-ai-backend（Spring Boot 后端）
@@ -27,188 +27,148 @@
 
 ---
 
-## 2. 运行时拓扑
+## 2. 当前真实架构（已更新）
 
-本地联调通常包含 4 个进程：
+当前已完成调用链升级：前端仅访问 Java 后端网关，不再直连 Python。
 
-1. MySQL（数据持久化）
-2. Java 后端（默认 8080）
-3. Python AI 服务（默认 5000）
-4. 前端 Vite 开发服务（默认 5173）
+调用拓扑：
 
-典型调用关系：
+1. 前端 -> Java 后端（8080）
+2. Java 后端 -> Python AI 服务（5000）
+3. Java 后端 -> MySQL（用户与问诊记录）
+4. Python AI 服务 -> Chroma + DeepSeek（问诊）/ ResNet（药材识别）
 
-- 前端 -> Java 后端：认证、问诊历史读写
-- 前端 -> Python AI：问诊回复生成
-- Java 后端 -> MySQL：用户与问诊记录存储
-- Python AI -> Chroma + 大模型：检索增强与生成
+网关接口：
 
-说明：当前是“前端双直连”模式（同时连 Java 与 Python）。
+- POST /api/ai/chat
+- POST /api/herb/identify
 
 ---
 
-## 3. 子系统职责
+## 3. 运行时拓扑
 
-### 3.1 前端（tcm-ai-frontend）
+本地联调通常包含 4 个进程：
+
+1. MySQL
+2. Java 后端（默认 8080）
+3. Python AI 服务（默认 5000）
+4. 前端 Vite（默认 5173）
+
+推荐启动顺序：
+
+1. MySQL
+2. Python AI
+3. Java 后端
+4. 前端
+
+---
+
+## 4. 子系统职责
+
+### 4.1 前端（tcm-ai-frontend）
 
 主要职责：
 
-- 用户交互与页面流程
-- 问诊会话、历史展示、报告导出
-- 舌诊与药材识别页面承载
-- 科普与 3D 可视化展示
+- 页面交互（问诊、舌诊、药材识别、个人中心）
+- 会话展示与历史管理
+- 上传图片并展示识别结果（置信度、Top3）
 
 关键入口：
 
 - src/main.js
 - src/router/index.js
 - src/views/Consultation/ConsultationView.vue
+- src/views/HerbIdentify/HerbIdentifyView.vue
 
 关键特征：
 
-- 支持 VITE_JAVA_API_BASE_URL / VITE_PYTHON_AI_BASE_URL
-- 路由覆盖首页、问诊、舌诊、药材识别、科普、认证、个人中心
+- 统一通过 VITE_JAVA_API_BASE_URL 调用后端
+- API 封装模块已启用：src/api/chat.js、src/api/herb.js
 
-### 3.2 后端（tcm-ai-backend）
+### 4.2 后端（tcm-ai-backend）
 
 主要职责：
 
 - 用户注册/登录与 JWT 鉴权
-- 问诊记录的保存、查询、删除
-- 统一业务返回体与异常处理
+- 问诊历史持久化
+- AI 网关转发（问诊 + 药材识别）
 
 关键入口：
 
-- src/main/java/com/example/tcm_ai_backend/TcmAiBackendApplication.java
+- src/main/java/com/example/tcm_ai_backend/controller/AiGatewayController.java
+- src/main/java/com/example/tcm_ai_backend/service/AiGatewayService.java
 - src/main/java/com/example/tcm_ai_backend/controller/AuthController.java
 - src/main/java/com/example/tcm_ai_backend/controller/ConsultationController.java
 
-关键特征：
-
-- 分层清晰：controller/service/entity/mapper/security
-- 持久化采用 JPA
-- SecurityContext 注入当前登录用户上下文
-
-### 3.3 AI 服务（Traditional Chinese Medicine expert）
+### 4.3 AI 服务（Traditional Chinese Medicine expert）
 
 主要职责：
 
-- 提供问诊回复 API
-- 结合本地知识库检索结果增强大模型回答
+- /api/ai/chat：RAG 检索增强问诊
+- /api/herb/identify：药材图像识别
 
 关键入口：
 
-- ai_server.py
+- ai_server.py（薄入口）
+- server/routes/chat.py
+- server/routes/herb.py
+- server/services/model_runtime.py
 
-关键特征：
-
-- 对外接口：POST /api/ai/chat
-- 本地向量库：tcm_chroma_db
-- 知识源：super_tcm_db.json、tcm_knowledge_db.json
-
-### 3.4 模型模块（model/cmcrs）
+### 4.4 模型模块（model/cmcrs）
 
 主要职责：
 
-- 图像分类训练（ResNet 系列）
-- 模型推理能力验证
+- ResNet 训练与推理
+- 提供 best.pth 权重与类别映射（365类）
 
 关键入口：
 
-- engine/trainer.py
-- engine/inferance.py
 - config/config.py
-
-当前状态：
-
-- 训练与推理代码独立存在
-- 与主业务在线推理链路尚未完全打通
+- models/resnet.py
+- engine/inferance.py
+- best.pth
 
 ---
 
-## 4. 核心业务链路
+## 5. 当前能力状态
 
-### 4.1 问诊链路（已确认）
-
-1. 用户在前端发送症状文本
-2. 前端调用 Python AI 获取回复
-3. 前端调用 Java 后端写入/读取问诊记录
-4. Java 后端将记录落库到 MySQL
-
-### 4.2 认证链路（已确认）
-
-1. 前端调用 /api/auth/register 或 /api/auth/login
-2. 后端返回 JWT
-3. 前端携带 Bearer Token 访问受保护接口
-
-### 4.3 舌诊/药材识别链路（部分推断）
-
-1. 前端页面与交互框架已存在
-2. API 封装与后端集成仍待补全
-3. 模型侧能力已具备，但线上编排未完成
+1. 问诊链路：可用（前端 -> Java -> Python -> LLM）
+2. 用户认证：可用（JWT）
+3. 问诊历史 CRUD：可用
+4. 药材识别链路：已接入并可返回模型结果
+5. 舌诊链路：页面存在，后端闭环仍待完善
 
 ---
 
-## 5. 架构现状评估
+## 6. 主要风险（需优先处理）
 
-优势：
-
-1. 前后端职责边界基本清晰
-2. 认证、问诊存储、AI 生成三条主能力已成型
-3. 模块拆分具备后续扩展基础
-
-主要风险：
-
-1. 安全风险
-   - 存在敏感信息硬编码风险（需迁移到环境变量）
-2. 一致性风险
-   - 前端双直连导致鉴权、审计、限流策略不统一
-3. 完整性风险
-   - 舌诊与药材识别未完成闭环
-4. 维护性风险
-   - 部分命名与空实现文件增加理解成本
+1. 敏感信息硬编码风险
+   - Python 中存在 API Key 默认值
+   - 后端存在数据库密码/JWT 密钥明文配置
+2. 安全配置风险
+   - CORS 策略仍较宽松
+3. 工程债务
+   - application.properties 仍有 MyBatis 遗留配置
+   - Python 依赖与模型部署需进一步规范（版本锁定、环境隔离）
+4. 编码显示问题
+   - Windows 终端存在中文输出乱码风险（接口结构不受影响）
 
 ---
 
-## 6. 推荐演进路线
+## 7. 快速联调
 
-短期（1-2 周）：
+示例流程：
 
-1. 密钥与密码全部改为环境变量
-2. 修复明显命名问题与空实现文件
-3. 增强 AI 接口异常处理与日志
-4. 清理遗留配置项，降低认知负担
+1. 启动 Python 服务（建议使用 ai_env）
+2. 启动 Java 后端
+3. 启动前端
+4. 登录后测试：
+   - 问诊发送消息
+   - 上传药材图片识别
 
-中期（1-2 月）：
+Python 依赖清单：
 
-1. 建立统一网关策略（前端仅访问 Java）
-2. Java 聚合转发 Python AI 请求
-3. 定义消息协议（DTO 或 JSON Schema）
-4. 打通舌诊/药材识别端到端闭环
-
-长期（2-3 月）：
-
-1. 引入 CI/CD 与自动化测试体系
-2. 推进容器化与分环境配置
-3. 加强可观测性（日志、链路、告警）
-
----
-
-## 7. 联调与排障建议
-
-启动顺序建议：
-
-1. MySQL
-2. Java 后端
-3. Python AI 服务
-4. 前端 Vite
-
-联调检查项：
-
-1. JWT 是否在问诊相关请求中正确附带
-2. AI 异常时是否有可见的前端降级提示
-3. 问诊 messages 序列化结构是否稳定
-4. 跨服务地址是否全部由环境变量控制
+- Traditional Chinese Medicine expert/requirements.txt
 
 ---
 
@@ -216,37 +176,30 @@
 
 前端：
 
-- tcm-ai-frontend/src/main.js
-- tcm-ai-frontend/src/router/index.js
+- tcm-ai-frontend/src/api/chat.js
+- tcm-ai-frontend/src/api/herb.js
 - tcm-ai-frontend/src/views/Consultation/ConsultationView.vue
-- tcm-ai-frontend/src/views/Tongue/TongueView.vue
+- tcm-ai-frontend/src/views/HerbIdentify/HerbIdentifyView.vue
+- tcm-ai-frontend/src/views/apps/personal-center/useSyndromeAnalysis.js
 
 后端：
 
-- tcm-ai-backend/src/main/java/com/example/tcm_ai_backend/TcmAiBackendApplication.java
-- tcm-ai-backend/src/main/java/com/example/tcm_ai_backend/controller/AuthController.java
-- tcm-ai-backend/src/main/java/com/example/tcm_ai_backend/controller/ConsultationController.java
+- tcm-ai-backend/src/main/java/com/example/tcm_ai_backend/controller/AiGatewayController.java
+- tcm-ai-backend/src/main/java/com/example/tcm_ai_backend/service/AiGatewayService.java
+- tcm-ai-backend/src/main/java/com/example/tcm_ai_backend/config/JacksonConfig.java
 - tcm-ai-backend/src/main/resources/application.properties
 
-AI 服务：
+AI 服务与模型：
 
 - Traditional Chinese Medicine expert/ai_server.py
-- Traditional Chinese Medicine expert/super_tcm_db.json
-- Traditional Chinese Medicine expert/tcm_knowledge_db.json
-
-模型：
-
+- Traditional Chinese Medicine expert/server/routes/chat.py
+- Traditional Chinese Medicine expert/server/routes/herb.py
+- Traditional Chinese Medicine expert/server/services/model_runtime.py
+- model/cmcrs/best.pth
 - model/cmcrs/config/config.py
-- model/cmcrs/engine/trainer.py
-- model/cmcrs/engine/inferance.py
-
-数据库：
-
-- 数据库.sql
-- 数据库2.txt
 
 ---
 
 ## 9. 变更记录
 
-- 2026-04-06：概览版文档迁移至 README.md，与详细版（docs/ARCHITECTURE.md）完成位置交换。
+- 2026-04-06：最终复扫完成，文档更新为“前端 -> Java 网关 -> Python AI”真实架构；补充药材识别闭环接入现状与风险项。

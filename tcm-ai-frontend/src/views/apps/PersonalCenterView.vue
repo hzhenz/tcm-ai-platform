@@ -215,7 +215,6 @@ import { useSyndromeAnalysis } from './personal-center/useSyndromeAnalysis'
 
 const router = useRouter()
 const JAVA_API_BASE_URL = (import.meta.env.VITE_JAVA_API_BASE_URL || 'http://localhost:8080').replace(/\/$/, '')
-const PYTHON_AI_BASE_URL = (import.meta.env.VITE_PYTHON_AI_BASE_URL || 'http://localhost:5000').replace(/\/$/, '')
 
 const activeTab = ref('tongue')
 const isRefreshing = ref(false)
@@ -257,10 +256,11 @@ const {
   runSyndromeAnalysis,
   buildOrganAssessmentPrompt
 } = useSyndromeAnalysis({
-  pythonAiBaseUrl: PYTHON_AI_BASE_URL,
+  aiApiBaseUrl: JAVA_API_BASE_URL,
   rawTongueData,
   rawConsultData,
-  getUserIdentity
+  getUserIdentity,
+  tokenKey: TOKEN_KEY
 })
 
 const goToAssessment = () => {

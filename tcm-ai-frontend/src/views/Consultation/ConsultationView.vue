@@ -162,11 +162,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
+import { postAiChat } from '@/api/chat'
 
 const router = useRouter()
 const route = useRoute()
 const JAVA_API_BASE_URL = (import.meta.env.VITE_JAVA_API_BASE_URL || 'http://localhost:8080').replace(/\/$/, '')
-const PYTHON_AI_BASE_URL = (import.meta.env.VITE_PYTHON_AI_BASE_URL || 'http://localhost:5000').replace(/\/$/, '')
 const TOKEN_KEY = 'tcm_token'
 const currentId = ref(null) 
 const reportAdvice = ref('')
@@ -381,20 +381,13 @@ const sendMsg = async (forcedText = '') => {
   scrollToBottom()
 
   try {
-    // ⚡️ 核心修改：这里请求 Python 的 5000 端口
-    const response = await fetch(`${PYTHON_AI_BASE_URL}/api/ai/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        content: inputText,
-        history: chatMessages.value.slice(0, -1).map(m => ({
-          role: m.type === 'ai' ? 'assistant' : 'user',
-          content: m.content
-        }))
-      })
+    const result = await postAiChat({
+      content: inputText,
+      history: chatMessages.value.slice(0, -1).map(m => ({
+        role: m.type === 'ai' ? 'assistant' : 'user',
+        content: m.content
+      }))
     })
-    
-    const result = await response.json()
     if (result.code === 200) {
       // 4. 获取回复，上屏，再存一次数据库
       chatMessages.value[thinkingIndex].content = result.data
@@ -405,6 +398,10 @@ const sendMsg = async (forcedText = '') => {
       chatMessages.value[thinkingIndex].content = '请稍后再试。'
     }
   } catch (error) {
+    if (error?.message === 'UNAUTHORIZED') {
+      handleUnauthorized()
+      return
+    }
     chatMessages.value[thinkingIndex].content = '（网络信号不佳，未能连接到诊室）'
   }
 }

@@ -34,14 +34,16 @@
 
 			<div class="result-box">
 				<h3>识别结果：<span v-if="!loading">{{ result.name || '---' }}</span><span v-else>识别中...</span></h3>
-				<div v-if="result.name" class="price-tag">当前市场价：{{ result.marketPrice }} 元/公斤</div>
+				<div v-if="result.name" class="price-tag">当前市场价：{{ result.marketPrice || '--' }} 元/公斤</div>
+				<div class="info-item"><span>置信度：</span>{{ result.confidenceText || '—' }}</div>
 
 				<div class="info-item"><span>性味：</span>{{ result.property || '—' }}</div>
 				<div class="info-item"><span>归经：</span>{{ result.meridian || '—' }}</div>
 				<div class="info-item"><span>功效：</span>{{ result.function || '—' }}</div>
-				<div class="info-item"><span>长沙本地均价：</span>{{ result.localPrice || '—' }} 元/公斤</div>
+				<div class="info-item"><span>长沙本地均价：</span>{{ result.localPrice || '--' }} 元/公斤</div>
+				<div v-if="result.topk.length" class="info-item"><span>Top3 预测：</span>{{ result.topk.join(' / ') }}</div>
 
-				<div v-if="!result.name && !loading" class="hint">请上传图片开始识别（示例默认展示甘草）</div>
+				<div v-if="!result.name && !loading" class="hint">请上传图片开始识别</div>
 			</div>
 		</div>
 
@@ -77,19 +79,46 @@
 
 <script setup>
 import { ref, reactive } from 'vue'
+import { identifyHerbByImage } from '@/api/herb'
 
 const fileInput = ref(null)
 const previewUrl = ref('')
 const loading = ref(false)
 
 const result = reactive({
-	name: '甘草',
-	marketPrice: 32,
-	property: '甘，平',
-	meridian: '心、肺、脾、胃经',
-	function: '益气补中，清热解毒，调和诸药',
-	localPrice: 35,
+	name: '',
+	marketPrice: '--',
+	property: '--',
+	meridian: '--',
+	function: '--',
+	localPrice: '--',
+	confidenceText: '',
+	topk: [],
 })
+
+const HERB_PROFILE_MAP = {
+	甘草: {
+		marketPrice: 32,
+		property: '甘，平',
+		meridian: '心、肺、脾、胃经',
+		function: '益气补中，清热解毒，调和诸药',
+		localPrice: 35,
+	},
+	当归: {
+		marketPrice: 68,
+		property: '甘、辛，温',
+		meridian: '肝、心、脾经',
+		function: '补血活血，调经止痛，润燥滑肠',
+		localPrice: 66,
+	},
+	黄芪: {
+		marketPrice: 55,
+		property: '甘，微温',
+		meridian: '脾、肺经',
+		function: '补气升阳，固表止汗，利水消肿',
+		localPrice: 53,
+	},
+}
 
 const STAT_KEY = 'herbIdentifyCount'
 
@@ -114,13 +143,14 @@ function triggerFile() {
 function clear() {
 	previewUrl.value && URL.revokeObjectURL(previewUrl.value)
 	previewUrl.value = ''
-	// reset to default example
-	result.name = '甘草'
-	result.marketPrice = 32
-	result.property = '甘，平'
-	result.meridian = '心、肺、脾、胃经'
-	result.function = '益气补中，清热解毒，调和诸药'
-	result.localPrice = 35
+	result.name = ''
+	result.marketPrice = '--'
+	result.property = '--'
+	result.meridian = '--'
+	result.function = '--'
+	result.localPrice = '--'
+	result.confidenceText = ''
+	result.topk = []
 }
 
 async function onFileChange(e) {
@@ -129,47 +159,42 @@ async function onFileChange(e) {
 	previewUrl.value && URL.revokeObjectURL(previewUrl.value)
 	previewUrl.value = URL.createObjectURL(file)
 
-	// 开始识别（占位）——实际识别请接入后端/本地模型
 	loading.value = true
 	try {
-		// 模拟异步识别，可替换为实际上传接口或本地推理函数
-		const res = await fakeIdentify(file)
-		Object.assign(result, res)
+		const response = await identifyHerbByImage(file)
+		if (response.code !== 200 || !response.data) {
+			throw new Error(response.msg || '识别失败')
+		}
+		applyPrediction(response.data)
 		bumpIdentifyCount()
 	} catch (err) {
-		console.error(err)
-		// 保持默认结果或显示错误
+		console.error('识别失败:', err)
+		alert(err?.message === 'UNAUTHORIZED' ? '登录状态已过期，请重新登录' : '识别失败，请稍后重试')
 	} finally {
 		loading.value = false
 	}
 }
 
-function fakeIdentify(file) {
-	return new Promise((resolve) => {
-		setTimeout(() => {
-			resolve({
-				name: '甘草',
-				marketPrice: 32,
-				property: '甘，平',
-				meridian: '心、肺、脾、胃经',
-				function: '益气补中，清热解毒，调和诸药',
-				localPrice: 35,
-			})
-		}, 900)
-	})
+function applyPrediction(data) {
+	const herbName = data.herbName || '--'
+	const profile = HERB_PROFILE_MAP[herbName] || {}
+	result.name = herbName
+	result.marketPrice = profile.marketPrice ?? '--'
+	result.property = profile.property ?? '--'
+	result.meridian = profile.meridian ?? '--'
+	result.function = profile.function ?? '--'
+	result.localPrice = profile.localPrice ?? '--'
+
+	const confidence = Number(data.confidence)
+	result.confidenceText = Number.isFinite(confidence) ? `${(confidence * 100).toFixed(2)}%` : '--'
+	result.topk = Array.isArray(data.topk)
+		? data.topk.map((item) => {
+			const score = Number(item?.confidence)
+			const percent = Number.isFinite(score) ? `${(score * 100).toFixed(1)}%` : '--'
+			return `${item?.name || '未知'}(${percent})`
+		})
+		: []
 }
-
-/*
-	将模型接入说明（示例）：
-	1) 后端API：将文件通过 FormData 上传到后端识别接口，如 `/api/herb/identify`，返回识别标签和置信度与相关信息。
-		 示例：
-			 const form = new FormData(); form.append('image', file);
-			 await fetch('/api/herb/identify', { method: 'POST', body: form })
-
-	2) 浏览器端部署模型：若要在前端直接运行模型，可使用 WebAssembly / ONNX.js / TensorFlow.js
-		 - 将训练好的模型导出成支持的格式并在前端加载推理。
-		 - 注意性能与体积：大型模型可能需要边缘服务器或模型裁剪/蒸馏。
-*/
 </script>
 
 <style scoped>

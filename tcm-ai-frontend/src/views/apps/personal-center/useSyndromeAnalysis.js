@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import { ORGAN_KEYS, ORGAN_LABELS, SYNDROME_CACHE_PREFIX, createEmptySyndromeSummary } from './constants'
 import { formatNullable, normalizeScore, parseAiJson } from './utils'
 
-export const useSyndromeAnalysis = ({ pythonAiBaseUrl, rawTongueData, rawConsultData, getUserIdentity }) => {
+export const useSyndromeAnalysis = ({ aiApiBaseUrl, rawTongueData, rawConsultData, getUserIdentity, tokenKey = 'tcm_token' }) => {
   const syndromeSummary = ref(createEmptySyndromeSummary())
 
   const isOrganMissing = (organKey) => syndromeSummary.value.organScores?.[organKey] === null
@@ -136,9 +136,15 @@ export const useSyndromeAnalysis = ({ pythonAiBaseUrl, rawTongueData, rawConsult
     }
 
     try {
-      const response = await fetch(`${pythonAiBaseUrl}/api/ai/chat`, {
+      const token = localStorage.getItem(tokenKey) || ''
+      const headers = { 'Content-Type': 'application/json' }
+      if (token) {
+        headers.Authorization = `Bearer ${token}`
+      }
+
+      const response = await fetch(`${aiApiBaseUrl}/api/ai/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           content: buildAssessPrompt(),
           history: []
