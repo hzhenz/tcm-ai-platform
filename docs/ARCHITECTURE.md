@@ -1,325 +1,245 @@
-# tcm-ai-platform 架构与功能分析（扫描结果）
+# TCM-AI 平台全项目扫描与分析报告（详细版）
 
-> 扫描日期：2026-04-05
+扫描日期：2026 年 4 月 6 日  
+扫描范围：当前仓库全量代码与文档（仅读取）
 
-## 1. 仓库结构总览
+## 文档导航
 
-- `tcm-ai-frontend/`：前端（Vue 3 + Vite + Element Plus + Three.js）
-- `tcm-ai-backend/`：后端（Spring Boot + Spring MVC + Spring Data JPA + MySQL）
-- `Traditional Chinese Medicine expert/`：Python AI 服务（Flask + RAG：Chroma + Embeddings + DeepSeek）
-- `test-api/`：独立的实验/测试 API 工程（Spring Boot + DeepSeek）
-- `数据库.sql`、`数据库2.txt`：数据库初始化脚本/草稿
+1. 概览版架构文档：README.md
+2. 详细版全量分析：docs/ARCHITECTURE.md（本文件）
 
-## 2. 运行时逻辑拓扑（服务与端口）
-
-典型本地联调时，涉及 3 个进程：
-
-1) 前端开发服务器：Vite（默认 `5173`，以实际为准）
-2) Java 后端：Spring Boot（`http://localhost:8080`）
-3) Python AI：Flask（`http://localhost:5000`）
-
-其中“问诊”链路是贯通的：
-
-- 浏览器（问诊页）
-  - 读写历史问诊：调用 Java 后端（8080）
-  - AI 对话生成：调用 Python AI（5000）
-- Java 后端
-  - MySQL 持久化：保存/读取问诊记录
-- Python AI
-  - 本地向量库检索（Chroma）
-  - 调用 DeepSeek 的 OpenAI 兼容接口生成回复
-
-## 3. 后端（tcm-ai-backend）架构与功能
-
-### 3.1 技术栈与配置
-
-- Spring Boot：`4.0.5`
-- Java：`17`
-- Web：`spring-boot-starter-webmvc`
-- ORM：`spring-boot-starter-data-jpa`
-- DB：MySQL（见 `application.properties`）
-
-配置文件：`tcm-ai-backend/src/main/resources/application.properties`
-
-- 端口：`server.port=8080`
-- 数据源：`jdbc:mysql://localhost:3306/tcm_ai...`
-- JPA：`spring.jpa.hibernate.ddl-auto=update`（会自动根据实体更新表结构）
-
-注意：配置里出现了 `mybatis.configuration.map-underscore-to-camel-case=true`，但当前后端依赖与代码实际使用的是 JPA（未看到 MyBatis 相关依赖/Mapper）。这更像是遗留配置。
-
-### 3.2 代码分层（按当前实现）
-
-当前后端已完成首轮工程化分层：
-
-- Controller：对外提供 REST API
-- Service：承载业务逻辑与事务边界
-- DTO：请求入参与校验边界
-- Entity：JPA 实体映射
-- Repository：Spring Data JPA 仓储接口
-- Utils：统一返回体 `Result<T>`
-- Exception Handler：统一异常处理
-
-当前已接入 JWT 鉴权与用户上下文注入。
-
-### 3.3 核心实体：ConsultationLog
-
-文件：`tcm-ai-backend/src/main/java/com/example/tcm_ai_backend/entity/ConsultationLog.java`
-
-字段（概念）：
-
-- `id`：主键
-- `userId`：用户 ID（由 JWT 登录态注入）
-- `title`：问诊主题
-- `messages`：聊天内容（以 JSON 字符串形式存储）
-- `createTime`：创建时间（返回给前端时按 `yyyy-MM-dd HH:mm` 格式序列化）
-
-### 3.4 数据访问：ConsultationLogRepository
-
-文件：`tcm-ai-backend/src/main/java/com/example/tcm_ai_backend/mapper/ConsultationLogRepository.java`
-
-- 继承 `JpaRepository<ConsultationLog, Long>`
-- 自定义查询：`findByUserIdOrderByCreateTimeDesc(Long userId)`
-
-> 目录名叫 `mapper/`，但实际是 JPA Repository（命名上略误导）。
-
-### 3.5 API：ConsultationController
-
-文件：`tcm-ai-backend/src/main/java/com/example/tcm_ai_backend/controller/ConsultationController.java`
-
-基础路径：`/api/consultation`
-
-- `GET /history`
-  - 功能：读取历史问诊（按时间倒序）
-  - 现状：从登录态读取 `currentUserId`
-  - 返回：`Result<List<ConsultationLog>>`
-
-- `POST /save`
-  - 功能：保存/更新问诊记录
-  - 现状：按登录用户自动绑定 `userId`，并在后端补 `createTime=new Date()`
-  - 入参：`SaveConsultationRequest`（DTO + 校验）
-  - 返回：`Result<ConsultationLog>`
-
-- `DELETE /delete/{id}`
-  - 功能：删除一条历史记录
-  - 返回：`Result<String>`
-
-- `POST /api/auth/register`
-  - 功能：用户注册并返回 JWT
-  - 入参：`RegisterRequest`
-  - 返回：`Result<AuthResponse>`（含 `token`、`userId`、`username`）
-
-- `POST /api/auth/login`
-  - 功能：用户登录并返回 JWT
-  - 入参：`LoginRequest`
-  - 返回：`Result<AuthResponse>`（含 `token`、`userId`、`username`）
-
-说明：`/api/auth/**` 免鉴权；问诊接口需携带 `Authorization: Bearer <token>`。
-
-跨域：Controller 上使用 `@CrossOrigin` 允许 Vue 跨域。
-
-### 3.6 后端返回体：Result<T>
-
-文件：`tcm-ai-backend/src/main/java/com/example/tcm_ai_backend/utils/Result.java`
-
-- `code`：`200` 成功 / `500` 失败
-- `msg`：消息
-- `data`：数据
-
-这决定了前端解析逻辑通常是 `if (result.code === 200) { ... }`。
-
-## 4. 前端（tcm-ai-frontend）架构与功能
-
-### 4.1 技术栈
-
-- Vue：`3.x`
-- 构建：Vite
-- UI：Element Plus + Icons
-- 数据请求：axios 依赖已装，但问诊页实际使用的是原生 `fetch`
-- 动画：AOS
-- 3D：Three.js（`HumanBody3D.vue`）
-- 富文本：marked（Markdown 渲染）
-- 导出：html2canvas + jsPDF（问诊报告导出 PDF）
-
-### 4.2 应用入口与路由
-
-入口：`tcm-ai-frontend/src/main.js`
-
-- 注册 Element Plus
-- 注册 router
-- 挂载到 `#app`
-
-路由：`tcm-ai-frontend/src/router/index.js`
-
-- `/`：首页 HomeView
-- `/tongue`：舌诊（望）
-- `/consultation`：问诊（问）
-- `/herb`：药材识别
-- `/map`：地图（当前为占位）
-- `/science`：科学/经络科普（含 3D）
-
-### 4.3 网络访问与代理
-
-Vite 代理配置：`tcm-ai-frontend/vite.config.js`
-
-- 将前端的 `/api/*` 代理到 `http://localhost:8080`
-
-当前问诊页已改为环境变量配置地址：
-
-- `VITE_JAVA_API_BASE_URL`（默认 `http://localhost:8080`）
-- `VITE_PYTHON_AI_BASE_URL`（默认 `http://localhost:5000`）
-
-其中 AI 链路采用前端直连 Python（5000），部署时通过 `.env` 注入地址即可。
-
-### 4.4 核心贯通页面：ConsultationView（问诊）
-
-文件：`tcm-ai-frontend/src/views/Consultation/ConsultationView.vue`
-
-功能链路（非常关键）：
-
-1) 页面加载时 `fetchHistory()` 调 Java 后端
-  - `GET ${VITE_JAVA_API_BASE_URL}/api/consultation/history`
-
-2) 用户发送消息 `sendMsg()`
-   - 将用户消息 push 到 `chatMessages`
-   - 调 `syncToDb()` 保存当前对话
-     - `POST ${VITE_JAVA_API_BASE_URL}/api/consultation/save`
-     - body：`{ id, title, messages: JSON.stringify(chatMessages) }`
-   - 再请求 Python AI
-     - `POST ${VITE_PYTHON_AI_BASE_URL}/api/ai/chat`
-     - body：`{ content, history: [{role, content}, ...] }`
-   - AI 回复后覆盖“思考中”消息，并再次 `syncToDb()` 做持久化
-
-3) 历史记录 CRUD
-   - 点击左侧历史：反序列化 `messages` JSON 回填聊天窗口
-  - 删除：`DELETE ${VITE_JAVA_API_BASE_URL}/api/consultation/delete/{id}`
-
-4) 结束问诊生成报告
-   - 取最后一条 AI 回复作为 `reportAdvice`
-   - 弹出卷轴风格报告弹层
-   - 支持复制文本、导出 PDF
-
-补充：已统一为前端直接调用 Python AI 的 `/api/ai/chat`，后端仅负责问诊记录持久化。
-
-### 4.5 其他页面现状（以当前代码为准）
-
-- 舌诊页：`tcm-ai-frontend/src/views/Tongue/TongueView.vue`
-  - 摄像头采集 + 本地展示 + “模拟 AI 结果”
-  - 7 日打卡：使用 `localStorage`
-  - 未接入后端/模型推理
-
-- 药材识别页：`tcm-ai-frontend/src/views/HerbIdentify/HerbIdentifyView.vue`
-  - 上传图片并本地 `fakeIdentify()` 模拟识别
-  - 价格表为前端静态 mock
-
-- 科学页：`tcm-ai-frontend/src/views/Science/ScienceView.vue`
-  - 经络科普内容 + 3D 经络明堂图（Three.js）
-
-- 地图页：`tcm-ai-frontend/src/views/Map/MapView.vue`
-  - 当前是占位文本
-
-- `src/api/chat.js`、`src/api/herb.js`、`src/api/tongue.js`、`src/store/index.js`、多组件文件目前为空，属于“预留/未完成”的工程骨架。
-
-## 5. Python AI 服务（Traditional Chinese Medicine expert）架构与功能
-
-文件：`Traditional Chinese Medicine expert/ai_server.py`
-
-### 5.1 技术栈
-
-- Flask + flask-cors：HTTP API + 跨域
-- langchain + chroma：向量检索
-- HuggingFaceEmbeddings：中文向量模型（`shibing624/text2vec-base-chinese`）
-- OpenAI SDK：用于调用 DeepSeek 的 OpenAI 兼容接口（`base_url=https://api.deepseek.com`）
-
-### 5.2 核心接口：POST /api/ai/chat
-
-请求 JSON：
-
-- `content`：用户当前输入
-- `history`：历史对话（数组，元素包含 `role`/`content`）
-
-处理流程（RAG）：
-
-1) `similarity_search(user_input, k=2)` 从本地 Chroma 库检索相关“古籍资料片段”
-2) 将检索结果拼入 `rag_prompt`（system prompt），对模型输出格式、问诊策略、免责声明等做强约束
-3) 合并 `history` + 当前 user message，调用 DeepSeek `deepseek-chat`
-4) 返回：`{ code: 200, data: ai_reply }` 或 `{ code: 500, msg: error }`
-
-向量库目录：`Traditional Chinese Medicine expert/tcm_chroma_db/`（持久化到 `chroma.sqlite3`）
-
-知识源：可见到 `super_tcm_db.json`、`tcm_knowledge_db.json` 等文件（用于构建/补充知识库）。
-
-## 6. test-api 子项目（实验工程）
-
-目录：`test-api/`
-
-目标：封装 DeepSeek Chat 调用并对外提供一个简单接口。
-
-当前扫描发现多个“包名/路径不一致”的问题，导致工程大概率无法编译运行：
-
-- `DeepSeekService.java` 的 `package` 声明为 `edu.hunn.cisc.testapi.service`，但文件实际放在 `edu/hunn/cisc/testapi/` 目录下（缺少 `service/` 目录层级）。
-- `ChatController.java` 的 import 写成了 `edu.hunn.fisc.testapi.service.DeepSeekService`（`fisc` 似乎是笔误，应为 `cisc`）。
-
-如果你希望我顺手把 test-api 修到可运行，我可以在下一步直接改正包路径与 import。
-
-## 7. 数据库脚本与表结构一致性
-
-- `数据库.sql`：全新初始化脚本（`app_user` + `consultation_log(messages)` + 索引/外键）
-- `数据库2.txt`：旧库迁移脚本（`user` -> `app_user`，并补齐 `messages` 等字段）
-
-与当前后端实体的差异：
-
-- 当前脚本已与实体对齐：`consultation_log` 包含 `messages`，并补充了按用户查询的联合索引。
-- 用户表已统一为 `app_user`（对应后端实体 `AppUser`）。
-
-## 8. 风险点与改进建议（按影响优先级）
-
-1) **密钥泄漏风险**
-   - Python `ai_server.py` 与 `test-api/application.properties` 中包含明文 `deepseek api key`。
-   - 建议改为环境变量/本地私有配置（并加入 `.gitignore`），避免提交到仓库。
-
-2) **接口调用链不统一**
-  - 已决策并落地：前端问诊页直连 Python（5000），后端不再提供 AI 代理。
-  - 已补充前端环境变量配置，区分 Java 持久化地址与 Python AI 地址。
-
-3) **用户体系（已完成首版）**
-  - 后端已接入 JWT 登录注册与鉴权过滤器，问诊记录按登录用户隔离；
-  - 前端已增加登录/注册页面，并在问诊请求中自动携带 Bearer Token；
-  - 路由策略已调整为：除首页/登录/注册外，其余页面均需登录后访问；
-  - 后端启动会自动初始化默认管理员账号（可通过配置覆盖）。
-
-4) **前端请求地址硬编码**
-  - 已完成：问诊页请求地址已改为环境变量注入，不再硬编码在业务请求中；
-  - 当前使用 `VITE_JAVA_API_BASE_URL` 与 `VITE_PYTHON_AI_BASE_URL`，并提供 `.env.example` 作为配置模板。
-
-5) **后端工程化分层（已完成首轮改造）**
-  - 已引入 DTO + `@Valid` 参数校验，避免实体直接暴露为入参；
-  - 已新增 Service 层承载业务逻辑，Controller 仅保留路由编排；
-  - 已新增全局异常处理（`@RestControllerAdvice`），统一返回业务错误消息。
 ---
 
-## 9. 后端架构优化（已实施）
+## 1. 项目概览
 
-本次已按工程项目实践，完成后端第一阶段结构升级：
+本仓库是一个中医智能平台原型，采用前后端分离，并引入独立 Python AI 服务与视觉模型模块。当前可识别的子系统如下：
 
-1) Controller 瘦身
-  - `ConsultationController` 改为仅负责路由与入参校验，核心逻辑下沉到 Service。
+1. tcm-ai-frontend：Vue 3 前端应用，承载问诊、舌诊、药材识别、科普等页面。
+2. tcm-ai-backend：Spring Boot 后端，当前重点实现用户认证与问诊记录管理。
+3. Traditional Chinese Medicine expert：Flask AI 服务，负责问诊回复生成（RAG + 大模型）。
+4. model/cmcrs：PyTorch 模型训练与推理代码（ResNet 体系）。
+5. docs：架构文档。
+6. 数据库.sql、数据库2.txt：数据库初始化与迁移脚本。
 
-2) DTO 边界收敛
-  - 新增 `SaveConsultationRequest`：约束标题与聊天记录必填；
-  - `POST /save` 改为 DTO 入参，避免实体直接暴露。
+---
 
-3) Service 层承载业务
-  - 新增 `ConsultationService`，统一处理历史查询、保存、删除；
-  - 在 Service 中集中处理“当前用户”判定与记录归属校验（已由 SecurityContext 注入用户）。
+## 2. 顶层结构与职责
 
-4) 异常统一处理
-  - 新增 `GlobalExceptionHandler`：统一处理参数校验错误、请求体解析错误、业务状态错误与兜底异常。
+### 2.1 目录职责映射
 
-5) 依赖补齐
-  - `pom.xml` 新增 `spring-boot-starter-validation`，支持 `jakarta validation` 注解校验；
-  - 新增 `spring-boot-starter-security` 与 `jjwt` 依赖，支持 JWT 鉴权。
+- tcm-ai-frontend
+  - 技术栈：Vue 3、Vite、Element Plus、Three.js。
+  - 主要职责：Web UI、问诊交互、舌象上传、3D 科普展示。
+  - 核心入口：src/main.js、src/router/index.js。
 
-### 下一阶段建议
+- tcm-ai-backend
+  - 技术栈：Spring Boot、Spring Security、JPA、MySQL、JWT。
+  - 主要职责：认证授权、问诊记录持久化、基础业务 API。
+  - 核心入口：src/main/java/com/example/tcm_ai_backend/TcmAiBackendApplication.java。
 
-- 增加 `response code` 细分（400/401/403/404/500）与错误码枚举；
-- 为 Service/Controller 补齐单元测试与接口测试。
+- Traditional Chinese Medicine expert
+  - 技术栈：Flask、Chroma、LangChain、OpenAI SDK（对接 DeepSeek）。
+  - 主要职责：智能问诊文本生成与知识检索增强。
+  - 核心入口：ai_server.py。
+
+- model/cmcrs
+  - 技术栈：PyTorch、TorchVision。
+  - 主要职责：图像分类模型训练、验证与推理。
+  - 核心入口：engine/trainer.py、engine/inferance.py。
+
+---
+
+## 3. 技术栈与关键实现
+
+### 3.1 前端（tcm-ai-frontend）
+
+已确认要点：
+
+1. 依赖覆盖了页面交互、动效、3D 与导出能力（例如 Element Plus、Three.js、AOS、jsPDF、html2canvas）。
+2. 路由已覆盖首页、问诊、舌诊、药材识别、科普、登录注册、个人中心等核心页面。
+3. Vite 代理将 /api 代理到本地 Java 服务（默认 8080）。
+4. 同时存在 Java API 与 Python AI 服务双地址配置，前端存在直接访问 Python 服务的调用路径。
+
+### 3.2 后端（tcm-ai-backend）
+
+已确认要点：
+
+1. 采用标准分层：controller、service、entity、security 等。
+2. 提供注册/登录与 JWT 认证链路。
+3. 问诊记录接口支持保存、历史查询、删除。
+4. 数据层以 JPA 为主，但配置中存在 MyBatis 遗留项。
+
+### 3.3 AI 服务（Traditional Chinese Medicine expert）
+
+已确认要点：
+
+1. 提供 /api/ai/chat 接口。
+2. 调用流程为：接收用户输入 -> 检索 Chroma 知识 -> 组织提示词 -> 请求大模型生成回复。
+3. 数据来源包含 tcm_knowledge_db.json 与 super_tcm_db.json。
+
+### 3.4 视觉模型（model/cmcrs）
+
+已确认要点：
+
+1. 支持 ResNet18/34/50/101/152。
+2. 训练与推理脚本齐备，具备数据集加载、训练、学习率调度、早停等基础能力。
+3. 命名上存在 inferance.py（拼写问题），但不影响理解。
+
+---
+
+## 4. 系统调用链分析
+
+### 4.1 问诊主链路（已确认）
+
+1. 用户在前端输入症状与问题。
+2. 前端向 AI 服务发送聊天请求，获得回复。
+3. 前端通过 Java 后端保存与查询问诊记录。
+4. Java 后端将记录存入 MySQL。
+
+当前形态属于“前端双直连”：
+
+- 一条链路连 Java（业务与存储）。
+- 一条链路连 Python（生成式 AI）。
+
+### 4.2 用户认证链路（已确认）
+
+1. 注册/登录请求进入 Java 后端。
+2. 后端验证凭证并生成 JWT。
+3. 前端携带 Bearer Token 调用受保护接口。
+
+### 4.3 舌诊/药材识别链路（部分推断）
+
+1. 页面入口与交互壳已存在。
+2. 识别 API 封装文件存在未完成项（chat.js、herb.js 为空）。
+3. 模型侧有独立训练/推理代码，但与主业务的线上调用闭环尚不完整。
+
+---
+
+## 5. 主要问题与风险清单
+
+### 5.1 高风险（优先处理）
+
+1. 敏感信息硬编码风险
+   - AI 服务代码中存在明文 API Key。
+   - 后端配置中存在明文数据库密码与固定 JWT 密钥。
+2. 安全边界不一致
+   - 前端直接访问 Python AI 服务，不利于统一鉴权、审计、限流与密钥保护。
+
+### 5.2 中风险
+
+1. 功能完整性不足
+   - 舌诊与药材识别主流程尚未形成稳定闭环。
+   - 前端部分 API 模块为空实现。
+2. 可维护性问题
+   - 部分命名与目录语义不一致（例如 mapper 实际承载 JPA repository 角色）。
+   - Python 包初始化文件存在拼写问题（__init_.py）。
+3. 工程一致性问题
+   - 配置包含未使用的历史项（MyBatis 配置残留）。
+   - 依赖存在可能未使用项，后续可做依赖清理。
+
+### 5.3 低风险
+
+1. 文档深度不足
+   - 目前缺少完整部署文档、环境矩阵、接口契约文档。
+2. 自动化与测试不足
+   - 缺少统一单测/集成测试覆盖目标与 CI 流水线描述。
+
+---
+
+## 6. 现阶段完成度评估
+
+1. 架构形态：已具备“前端 + Java 后端 + Python AI + 模型代码”四层雏形。
+2. 核心可用能力：问诊对话与问诊记录管理基本成型。
+3. 关键短板：安全治理、功能闭环、统一网关、测试体系。
+
+综合判断：当前项目处于“可演示原型 -> 可交付系统”的过渡阶段。
+
+---
+
+## 7. 分阶段改进建议
+
+### 7.1 短期（1-2 周）
+
+1. 立即移除所有硬编码密钥，改用环境变量。
+2. 修复明显命名与空实现问题（__init_.py、chat.js、herb.js）。
+3. 补齐 AI 接口错误处理与日志。
+4. 清理后端遗留配置，保证技术栈表达一致。
+
+### 7.2 中期（1-2 月）
+
+1. 建立统一 API 网关策略
+   - 前端只访问 Java 后端。
+   - Java 后端转发/聚合 Python AI 服务。
+2. 规范消息协议
+   - 为问诊消息结构定义稳定 DTO 或 JSON Schema。
+3. 完成舌诊与药材识别业务闭环
+   - 上传、推理、结果解释、记录入库、历史追踪。
+
+### 7.3 长期（2-3 月）
+
+1. 引入 CI/CD 与自动化测试（单测、集成测试、接口测试）。
+2. 推进容器化部署与配置分环境管理。
+3. 完善可观测性（日志聚合、调用链追踪、告警）。
+
+---
+
+## 8. 运行与联调建议
+
+建议采用四进程本地联调：
+
+1. MySQL：初始化数据库脚本。
+2. Java 后端：端口 8080。
+3. Python AI：端口 5000。
+4. 前端 Vite：默认开发端口。
+
+联调重点：
+
+1. 登录后 JWT 是否正确附带到问诊记录接口。
+2. AI 回复失败时前端是否有降级提示。
+3. 问诊记录序列化结构是否稳定。
+
+---
+
+## 9. 关键文件索引
+
+前端：
+
+- tcm-ai-frontend/src/main.js
+- tcm-ai-frontend/src/router/index.js
+- tcm-ai-frontend/src/views/Consultation/ConsultationView.vue
+- tcm-ai-frontend/src/views/Tongue/TongueView.vue
+- tcm-ai-frontend/src/api/chat.js
+- tcm-ai-frontend/src/api/herb.js
+
+后端：
+
+- tcm-ai-backend/src/main/java/com/example/tcm_ai_backend/TcmAiBackendApplication.java
+- tcm-ai-backend/src/main/java/com/example/tcm_ai_backend/controller/AuthController.java
+- tcm-ai-backend/src/main/java/com/example/tcm_ai_backend/controller/ConsultationController.java
+- tcm-ai-backend/src/main/resources/application.properties
+
+AI 服务：
+
+- Traditional Chinese Medicine expert/ai_server.py
+- Traditional Chinese Medicine expert/super_tcm_db.json
+- Traditional Chinese Medicine expert/tcm_knowledge_db.json
+
+模型：
+
+- model/cmcrs/config/config.py
+- model/cmcrs/engine/trainer.py
+- model/cmcrs/engine/inferance.py
+- model/cmcrs/data/dataset.py
+
+文档：
+
+- docs/ARCHITECTURE.md
+- README.md
+- 数据库.sql
+- 数据库2.txt
+
+---
+
+## 10. 结论
+
+该项目已具备较完整的中医 AI 平台原型轮廓，前后端与 AI 服务边界清晰，核心问诊能力可运行。但距离生产级系统仍有关键差距，尤其集中在安全治理、功能闭环与工程化规范。若按本报告中的短中长期路线推进，可较平滑地从“演示型原型”升级到“可运维、可扩展、可审计”的业务系统。
