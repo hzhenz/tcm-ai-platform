@@ -64,10 +64,15 @@
             <div class="calendar-title">
               <span>📅 7日舌疗打卡</span>
               <span v-if="checkInDays.length >= 3" class="checkin-tip">连续3天打卡！改善效果增强✨</span>
+              <button class="btn btn-tan" style="margin-left:12px;" @click="checkInToday">今日打卡</button>
             </div>
             <div class="calendar">
-              <div v-for="day in 7" :key="day" class="calendar-day" :class="{ active: checkInDays.includes(day) }" @click="toggleCheckIn(day)">
+              <div v-for="day in 7" :key="day" class="calendar-day" :class="{ active: checkInDays.includes(day) }">
                 {{ day }}
+                <div class="day-tooltip" v-if="getRecordByDay(day)">
+                  <img v-if="getRecordByDay(day).image" :src="getRecordByDay(day).image" alt="thumb" />
+                  <div class="tt-text">{{ getRecordByDay(day).date || '—' }}<br>{{ formatTime(getRecordByDay(day).timestamp) }}</div>
+                </div>
               </div>
             </div>
           </div>
@@ -85,12 +90,15 @@
         
         <div class="report-header">
           <h2>🌿 智能舌诊报告 🌾</h2>
-          <p class="report-date">{{ reportDate }}</p>
+          <div class="herb-note">望闻问切 · 四诊合参</div>
+          <div class="used-note" v-if="usedRecordForReport">
+            使用的数据时间：{{ formatTimestamp(usedRecordForReport.timestamp) }}（以最后一次保存为准）
+          </div>
         </div>
 
         <div class="report-body">
           <div class="tongue-thumb">
-            <img :src="thumbUrl || uploadedImageUrl" alt="舌象缩略图">
+            <img :src="(usedRecordForReport && usedRecordForReport.image) || thumbUrl || uploadedImageUrl" alt="舌象缩略图">
           </div>
           <div class="report-details">
             <div class="detail-item">
@@ -114,6 +122,9 @@
 
         <div class="report-footer">
           <div class="herb-note">望闻问切 · 四诊合参</div>
+          <div class="used-note" v-if="usedRecordForReport">
+            使用的数据时间：{{ usedRecordForReport.date }} {{ formatTimestamp(usedRecordForReport.timestamp) }}（以最后一次保存为准）
+          </div>
           <div class="report-actions">
             <button @click="copyReportText" class="btn-copy">📋 复制报告</button>
             <button @click="closeReportModal" class="btn-close">关闭</button>
@@ -126,7 +137,7 @@
 </template>
 
 <script setup>
-import { ref, onUnmounted } from 'vue'
+import { ref, onUnmounted, computed } from 'vue'
 
 // --- DOM 引用 ---
 const videoRef = ref(null)
@@ -145,35 +156,130 @@ const diagnosis = ref('湿热证候 87%')
 const dietSuggestion = ref('薏米红豆粥、冬瓜海带汤')
 const acupointSuggestion = ref('足三里、阴陵泉（每日2次）')
 
-// 打卡数据
-const checkInDays = ref(JSON.parse(localStorage.getItem('tongueCheckIn') || '[]'))
+// 打卡数据：存为数组 of { day: number, date: 'YYYY-MM-DD', timestamp: ISO string, image?: string }
+const _stored = JSON.parse(localStorage.getItem('tongueCheckIn') || '[]')
+const initialRecords = (Array.isArray(_stored) && _stored.length && typeof _stored[0] === 'number')
+  ? _stored.map(d => ({ day: d, date: null, timestamp: new Date().toISOString(), image: null }))
+  : (_stored || [])
+const checkInRecords = ref(initialRecords)
+
+const getDateOnly = (dt = new Date()) => dt.toISOString().slice(0, 10)
+
+// 计算以今天为终点的连续打卡天数（按日期连续）
+const computeConsecutiveStreak = (endDateStr = getDateOnly()) => {
+  const dates = new Set(checkInRecords.value.map(r => r.date).filter(Boolean))
+  let count = 0
+  let cur = new Date(endDateStr)
+  while (true) {
+    const d = getDateOnly(cur)
+    if (dates.has(d)) {
+      count++
+      // 前一天
+      cur.setDate(cur.getDate() - 1)
+    } else {
+      break
+    }
+  }
+  return count
+}
+
+// 兼容原模板：提供只含 day 数字的数组，便于模板使用 `checkInDays.includes(day)` 和 `checkInDays.length`
+const checkInDays = computed(() => checkInRecords.value.map(r => r.day))
 
 // 报告模态框
 const showReportModal = ref(false)
 const reportDate = ref('')
+const usedRecordForReport = ref(null)
+
+// 辅助：按 day 查找对应记录（若有）
+const getRecordByDay = (day) => {
+  return checkInRecords.value.find(r => r.day === day) || null
+}
+
+const formatTimestamp = (iso) => {
+  if (!iso) return ''
+  try { return new Date(iso).toLocaleString() } catch (e) { return iso }
+}
+
+const formatTime = (iso) => {
+  if (!iso) return ''
+  try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) } catch (e) { return iso }
+}
 
 // --- 打卡逻辑 ---
 const saveCheckIn = () => {
-  localStorage.setItem('tongueCheckIn', JSON.stringify(checkInDays.value))
+  localStorage.setItem('tongueCheckIn', JSON.stringify(checkInRecords.value))
 }
 
-const toggleCheckIn = (day) => {
-  const index = checkInDays.value.indexOf(day)
-  if (index > -1) {
-    checkInDays.value.splice(index, 1)
-  } else {
-    checkInDays.value.push(day)
+// 判断某天是否已打卡（按 day slot）
+const isDayActive = (day) => {
+  return checkInRecords.value.some(r => r.day === day)
+}
+
+// 今日打卡：按日期自动填充（用户不可手动指定保存到哪天）
+const checkInToday = () => {
+  const today = getDateOnly()
+  const now = new Date().toISOString()
+  const image = thumbUrl.value || uploadedImageUrl.value || null
+
+  // 若当天已有记录则更新该记录（覆盖为最后一次保存）
+  const todayIdx = checkInRecords.value.findIndex(r => r.date === today)
+  if (todayIdx > -1) {
+    checkInRecords.value[todayIdx].timestamp = now
+    checkInRecords.value[todayIdx].image = image
+    saveCheckIn()
+    alert(`已更新今天打卡时间为 ${new Date(now).toLocaleString()}，将使用最后一次保存的数据`)
+    // 检查连续并可能重置
+    const streak = computeConsecutiveStreak()
+    if (streak >= 7) {
+      alert(`🎉 恭喜你已连续打卡 ${streak} 天，周期已完成并将重新开始！`)
+      checkInRecords.value = []
+      saveCheckIn()
+    }
+    return
   }
-  saveCheckIn()
+
+  // 否则按序填充第一个未占用的 day 插槽（若都已占用则提示已完成）
+  for (let day = 1; day <= 7; day++) {
+    if (!checkInRecords.value.some(r => r.day === day)) {
+      checkInRecords.value.push({ day, date: today, timestamp: now, image })
+      saveCheckIn()
+      alert(`已完成第 ${day} 天打卡（${new Date(now).toLocaleString()}）`)
+      const streak = computeConsecutiveStreak()
+      if (streak >= 7) {
+        alert(`🎉 恭喜你已连续打卡 ${streak} 天，周期已完成并将重新开始！`)
+        checkInRecords.value = []
+        saveCheckIn()
+      }
+      return
+    }
+  }
+
+  alert('您已完成全部7天打卡！无需重复打卡。')
 }
 
 // 自动打卡：按顺序1-7，填充第一个未打卡的日期
 const autoCheckIn = () => {
+  const today = getDateOnly()
+  const now = new Date().toISOString()
+  const image = thumbUrl.value || uploadedImageUrl.value || null
+
+  // 如果当天已有记录，则更新该记录（不再新增其它 slot）
+  const todayIdx = checkInRecords.value.findIndex(r => r.date === today)
+  if (todayIdx > -1) {
+    checkInRecords.value[todayIdx].timestamp = now
+    checkInRecords.value[todayIdx].image = image
+    saveCheckIn()
+    alert(`已更新今天的打卡时间为 ${new Date(now).toLocaleString()}，将使用最后一次保存的数据`)
+    return true
+  }
+
+  // 否则找到第一个尚未占用的 day 插槽并新增记录
   for (let day = 1; day <= 7; day++) {
-    if (!checkInDays.value.includes(day)) {
-      checkInDays.value.push(day)
+    if (!checkInRecords.value.some(r => r.day === day)) {
+      checkInRecords.value.push({ day, date: today, timestamp: now, image })
       saveCheckIn()
-      alert(`🎉 恭喜完成第 ${day} 天舌疗打卡！继续坚持～`)
+      alert(`🎉 恭喜完成第 ${day} 天舌疗打卡！（${new Date(now).toLocaleString()}）继续坚持～`)
       return true
     }
   }
@@ -316,8 +422,16 @@ const generateReport = () => {
 
   // 自动打卡
   autoCheckIn()
-
-  reportDate.value = new Date().toLocaleString()
+  // 报告使用最近一次保存的打卡记录（若存在），并标注该时间，同时保存引用用于展示
+  const latest = checkInRecords.value.slice().sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''))[0]
+  if (latest) {
+    reportDate.value = new Date(latest.timestamp).toLocaleString()
+    usedRecordForReport.value = latest
+  } else {
+    reportDate.value = new Date().toLocaleString()
+    usedRecordForReport.value = null
+  }
+  // 在报告中提示：使用的数据为最后一次保存的结果
   showReportModal.value = true
 }
 
@@ -325,6 +439,7 @@ const generateReport = () => {
 const copyReportText = () => {
   const reportText = `=== 智能舌诊报告 ===
 问诊时间：${reportDate.value}
+（说明：报告使用的数据为您当天最后一次保存的打卡结果）
 辨证结果：${diagnosis.value}
 食疗建议：${dietSuggestion.value}
 穴位建议：${acupointSuggestion.value}
@@ -539,7 +654,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
+  cursor: default;
   transition: all 0.3s;
 }
 .calendar-day.active {
@@ -703,4 +818,24 @@ body {
   color: #B2977A;
   margin-top: 10px;
 }
+
+/* 视觉与交互微调 */
+:root{
+  --primary: #A67C52;
+  --accent: #2E7D32;
+  --bg: #F8F5E8;
+  --card: #FFFFFF;
+  --muted: #8B6B42;
+}
+.btn{transition:transform .12s ease,box-shadow .12s ease}
+.btn:active{transform:translateY(1px)}
+.calendar-day{position:relative}
+.day-tooltip{position:absolute;left:50%;transform:translateX(-50%) translateY(-8px);bottom:100%;background:rgba(0,0,0,0.8);color:#fff;padding:6px;border-radius:8px;min-width:120px;text-align:center;z-index:20;opacity:0;pointer-events:none;transition:opacity .15s}
+.calendar-day:hover .day-tooltip{opacity:1;pointer-events:auto}
+.day-tooltip img{width:48px;height:48px;object-fit:cover;border-radius:6px;display:block;margin:0 auto 6px}
+.used-note{font-size:0.85rem;color:var(--muted);margin-top:8px}
+.report-card{transition:transform .12s ease,opacity .12s ease}
+
+/* 已打卡渐变样式 */
+.calendar-day.active{background:linear-gradient(135deg,var(--accent),#4CAF50);box-shadow:0 6px 12px rgba(46,125,50,0.12)}
 </style>
