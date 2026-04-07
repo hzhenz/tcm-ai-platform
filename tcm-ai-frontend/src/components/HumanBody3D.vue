@@ -17,13 +17,6 @@
 
     <!-- 顶部状态栏 (新中式卷轴风) -->
     <div class="hud-top" :class="{ 'fade-in': !isLoading }">
-      <div class="hud-main-title">
-        <div class="title-decor"></div>
-        <div class="title-text">
-          <h1>三维经络明堂图</h1>
-          <h2>DIGITAL MINGTANG · 气血流注推演系统</h2>
-        </div>
-      </div>
       <div class="hud-sys-status">
         <div class="status-item"><span class="dot blink"></span> 经气映射：法线贴合完成</div>
         <div class="status-item"><span class="dot"></span> 阴阳五行：相生相合</div>
@@ -706,36 +699,6 @@ const updateLabelsPosition = () => {
   z-index: 10;
 }
 
-.hud-main-title {
-  display: flex;
-  gap: 16px;
-}
-
-.title-decor {
-  width: 3px;
-  background: linear-gradient(to bottom, #D4AF37, transparent);
-  box-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
-}
-
-.title-text h1 {
-  font-size: 28px;
-  font-weight: normal;
-  letter-spacing: 8px;
-  margin: 0;
-  color: #E8D5C4;
-  text-shadow: 0 2px 15px rgba(212, 175, 55, 0.4);
-}
-
-.title-text h2 {
-  font-size: 11px;
-  color: #A68D70;
-  letter-spacing: 3px;
-  margin: 8px 0 0 0;
-  font-weight: normal;
-  font-family: -apple-system, sans-serif;
-  text-transform: uppercase;
-}
-
 .hud-sys-status {
   text-align: right;
   font-size: 13px;
@@ -1029,7 +992,6 @@ const updateLabelsPosition = () => {
 @media (max-width: 768px) {
   .human-body-3d-wrapper { height: 500px; }
   .hud-top { left: 20px; right: 20px; top: 20px; }
-  .hud-main-title h1 { font-size: 20px; letter-spacing: 4px; }
   .hud-sys-status { display: none; }
   .hud-bottom { padding: 20px; flex-direction: column; align-items: flex-start; gap: 10px; }
   .label-line { width: 30px; }
