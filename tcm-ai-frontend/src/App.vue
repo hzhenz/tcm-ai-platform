@@ -1,13 +1,15 @@
 <template>
-  <router-view></router-view>
+  <div class="app-shell">
+    <router-view />
+    <AgentButlerBubble />
+  </div>
 </template>
 
 <script setup>
-// 根组件暂时不需要写什么逻辑
+import AgentButlerBubble from '@/components/AgentButlerBubble.vue'
 </script>
 
-<style lang="css" scoped>
-/* 清除浏览器默认边距，让页面完美铺满 */
+<style lang="css">
 html, body {
   margin: 0;
   padding: 0;
@@ -17,6 +19,11 @@ html, body {
 
 #app {
   width: 100%;
-  height: 100%;
+  min-height: 100%;
+}
+
+.app-shell {
+  position: relative;
+  min-height: 100vh;
 }
 </style>

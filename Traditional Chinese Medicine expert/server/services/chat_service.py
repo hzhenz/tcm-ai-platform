@@ -1,4 +1,7 @@
 import os
+import json
+import re
+from typing import Optional
 
 from langchain_community.vectorstores import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -11,6 +14,32 @@ client = OpenAI(
     api_key=os.getenv("DEEPSEEK_API_KEY", "sk-a567cf2d96074f4e92fafbc71225cb5e"),
     base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
 )
+
+
+DEFAULT_TOOL_DEFINITIONS = [
+    {
+        "name": "book_expert_appointment",
+        "description": "自动预约中医专家号",
+        "parameters": {
+            "department": "string",
+            "date": "string",
+            "autoExecute": "boolean"
+        }
+    },
+    {
+        "name": "route_to_page",
+        "description": "跳转到站内页面",
+        "parameters": {
+            "targetPath": "string",
+            "presetPrompt": "string"
+        }
+    },
+    {
+        "name": "open_task_center",
+        "description": "打开任务中心",
+        "parameters": {}
+    }
+]
 
 
 def generate_chat_reply(user_input: str, history: list) -> str:
@@ -59,3 +88,108 @@ def generate_chat_reply(user_input: str, history: list) -> str:
         stream=False,
     )
     return response.choices[0].message.content
+
+
+def generate_tool_plan(user_input: str, history: Optional[list] = None, current_path: str = "", tools: Optional[list] = None) -> dict:
+    history = history or []
+    tools = tools or DEFAULT_TOOL_DEFINITIONS
+
+    planner_prompt = """
+你是 AI Agent 的工具规划器。你只能输出一个 JSON 对象，不要输出 markdown，不要输出额外解释。
+
+输出 JSON Schema:
+{
+  "intent": "string",
+  "toolName": "string",
+  "arguments": {"key": "value"},
+  "confidence": 0.0,
+  "reason": "string"
+}
+
+规则:
+1) 如果需要自动挂号，toolName 必须是 book_expert_appointment，arguments 中至少包含 department 与 date。
+    仅当用户明确表达“挂号/预约/约号/门诊”动作意图时才能使用该工具；
+    如果用户只是表达“不舒服/难受/头痛/咳嗽”等症状，必须返回 toolName=none。
+2) 如果用户是页面跳转诉求，toolName 用 route_to_page，并提供 targetPath。
+3) 如果用户想看任务/审批，toolName 用 open_task_center。
+4) 无法确定时 toolName 返回 none，intent 返回 unknown。
+5) confidence 取 0-1 之间小数。
+""".strip()
+
+    compact_history = []
+    for message in history[-6:]:
+        if not isinstance(message, dict):
+            continue
+        role = str(message.get("role", "")).strip()
+        content = str(message.get("content", "")).strip()
+        if not role or not content:
+            continue
+        compact_history.append({"role": role, "content": content})
+
+    user_payload = {
+        "currentPath": current_path,
+        "userInput": user_input,
+        "availableTools": tools,
+        "history": compact_history,
+    }
+
+    response = client.chat.completions.create(
+        model=os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+        messages=[
+            {"role": "system", "content": planner_prompt},
+            {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
+        ],
+        temperature=0.0,
+        stream=False,
+    )
+    content = response.choices[0].message.content or ""
+    return _parse_tool_plan_response(content)
+
+
+def _parse_tool_plan_response(content: str) -> dict:
+    raw = (content or "").strip()
+    if raw.startswith("```"):
+        raw = re.sub(r"^```(?:json)?", "", raw).strip()
+        raw = re.sub(r"```$", "", raw).strip()
+
+    parsed = None
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        match = re.search(r"\{[\s\S]*\}", raw)
+        if match:
+            try:
+                parsed = json.loads(match.group(0))
+            except Exception:
+                parsed = None
+
+    if not isinstance(parsed, dict):
+        return {
+            "intent": "unknown",
+            "toolName": "none",
+            "arguments": {},
+            "confidence": 0.0,
+            "reason": "tool planner output is not valid json",
+        }
+
+    intent = str(parsed.get("intent", "unknown") or "unknown").strip()
+    tool_name = str(parsed.get("toolName", "none") or "none").strip()
+    arguments = parsed.get("arguments")
+    if not isinstance(arguments, dict):
+        arguments = {}
+
+    try:
+        confidence = float(parsed.get("confidence", 0.0) or 0.0)
+    except Exception:
+        confidence = 0.0
+    confidence = max(0.0, min(1.0, confidence))
+
+    reason = str(parsed.get("reason", "") or "").strip()
+
+    return {
+        "intent": intent,
+        "toolName": tool_name,
+        "arguments": arguments,
+        "confidence": confidence,
+        "reason": reason,
+    }

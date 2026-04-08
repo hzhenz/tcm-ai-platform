@@ -348,6 +348,7 @@ const initRadarChart = () => {
     animationDuration: 1000,
     animationEasing: 'cubicOut',
     radar: {
+      alignTicks: false,
       indicator: [
         { name: '心', max: 100 },
         { name: '脾', max: 100 },

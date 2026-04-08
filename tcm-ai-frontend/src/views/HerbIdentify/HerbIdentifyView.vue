@@ -34,14 +34,14 @@
 						<img :src="previewUrl" alt="preview" ref="previewImg" @load="onImageLoad" />
 
 						<div
-							v-for="(d, idx) in detectionsWithBbox"
+							v-for="d in detectionsWithBbox"
 							:key="d.id"
 							class="bbox"
-							:class="{ active: selectedIndex === idx }"
+							:class="{ active: selectedIndex === d.rawIndex }"
 							:style="bboxStyle(d.bbox)"
-							@click.stop="selectDetection(idx)"
+							@click.stop="selectDetection(d.rawIndex)"
 						>
-							<div class="badge">{{ idx + 1 }}</div>
+							<div class="badge">{{ d.rawIndex + 1 }}</div>
 						</div>
 
 						<div class="full-image-actions">
@@ -50,38 +50,12 @@
 						</div>
 					</div>
 				</div>
-
-				<div class="detect-list" v-if="detections.length">
-					<h4>{{ detectionsWithBbox.length ? `检测到 ${detectionsWithBbox.length} 个目标` : '候选结果' }}</h4>
-					<ul>
-						<li
-							v-for="(d, idx) in detections"
-							:key="d.id"
-							:class="{ active: selectedIndex === idx }"
-							@click="selectDetection(idx)"
-						>
-							<span class="num">{{ idx + 1 }}</span>
-							<div class="meta">
-								<div class="name">{{ d.name }}</div>
-								<div class="conf">置信度：{{ formatConfidence(d.confidence) }}</div>
-							</div>
-						</li>
-					</ul>
-				</div>
 			</div>
 
 			<div class="result-box">
-				<h3>识别结果：<span v-if="!loading">{{ result.name || '---' }}</span><span v-else>识别中...</span></h3>
-				<div v-if="result.name" class="price-tag">当前市场价：{{ result.marketPrice || '--' }} 元/公斤</div>
-				<div class="info-item"><span>置信度：</span>{{ result.confidenceText || '—' }}</div>
-				<div class="info-item"><span>性味：</span>{{ result.property || '—' }}</div>
-				<div class="info-item"><span>归经：</span>{{ result.meridian || '—' }}</div>
-				<div class="info-item"><span>功效：</span>{{ result.function || '—' }}</div>
-				<div class="info-item"><span>长沙本地均价：</span>{{ result.localPrice || '--' }} 元/公斤</div>
-				<div v-if="result.topk.length" class="info-item"><span>Top3 预测：</span>{{ result.topk.join(' / ') }}</div>
-
-				<div v-if="orderedHerbFeatures.length" class="ordered-feature-list">
-					<h4 class="ordered-title">按标号顺序的草药特性</h4>
+				<h3>识别结果列表</h3>
+				<div v-if="loading" class="hint">识别中...</div>
+				<div v-else-if="orderedHerbFeatures.length" class="ordered-feature-list">
 					<div
 						v-for="item in orderedHerbFeatures"
 						:key="item.id"
@@ -92,7 +66,7 @@
 						<div class="feature-head">
 							<span class="feature-num">{{ item.index }}</span>
 							<span class="feature-name">{{ item.name }}</span>
-							<span class="feature-conf">{{ item.confidenceText || '--' }}</span>
+							<span class="feature-conf">精准度：{{ item.confidenceText || '--' }}</span>
 						</div>
 						<div class="feature-row"><span>性味：</span>{{ item.property }}</div>
 						<div class="feature-row"><span>归经：</span>{{ item.meridian }}</div>
@@ -101,8 +75,7 @@
 						<div class="feature-row"><span>长沙均价：</span>{{ item.localPrice }} 元/公斤</div>
 					</div>
 				</div>
-
-				<div v-if="!result.name && !loading" class="hint">请上传图片开始识别</div>
+				<div v-else class="hint">{{ previewUrl ? '暂未识别到草药，请更换图片重试' : '请上传图片开始识别' }}</div>
 			</div>
 		</div>
 
@@ -183,7 +156,9 @@ const HERB_PROFILE_MAP = {
 	},
 }
 
-const detectionsWithBbox = computed(() => detections.value.filter((item) => Array.isArray(item.bbox) && item.bbox.length === 4))
+const detectionsWithBbox = computed(() => detections.value
+	.map((item, idx) => ({ ...item, rawIndex: idx }))
+	.filter((item) => Array.isArray(item.bbox) && item.bbox.length === 4))
 const orderedHerbFeatures = computed(() => {
 	if (detections.value.length) {
 		return detections.value.map((item, idx) => ({
@@ -194,21 +169,6 @@ const orderedHerbFeatures = computed(() => {
 			confidenceText: formatConfidence(item.confidence),
 			...resolveHerbProfile(item.name),
 		}))
-	}
-
-	if (result.name && result.name !== '--') {
-		return [{
-			id: 'single-0',
-			rawIndex: -1,
-			index: 1,
-			name: result.name,
-			confidenceText: result.confidenceText,
-			marketPrice: result.marketPrice,
-			property: result.property,
-			meridian: result.meridian,
-			function: result.function,
-			localPrice: result.localPrice,
-		}]
 	}
 
 	return []
@@ -318,6 +278,15 @@ function buildDetections(data) {
 		}))
 	}
 
+	if (data.herbName) {
+		return [{
+			id: `${data.herbName}-0`,
+			name: data.herbName,
+			confidence: Number(data.confidence),
+			bbox: null,
+		}]
+	}
+
 	return []
 }
 
@@ -349,17 +318,14 @@ async function onFileChange(e) {
 }
 
 function applyPrediction(data) {
-	const herbName = data.herbName || '--'
-	applyProfile(herbName, data.confidence)
-
-	result.topk = Array.isArray(data.topk)
-		? data.topk.map((item) => `${item?.name || '未知'}(${formatConfidence(item?.confidence)})`)
-		: []
-
-	detections.value = buildDetections(data)
+	const allDetections = buildDetections(data)
+	detections.value = allDetections
 	if (detections.value.length) {
 		selectedIndex.value = 0
 		selectDetection(0)
+	} else {
+		selectedIndex.value = -1
+		resetResult()
 	}
 }
 
@@ -414,10 +380,10 @@ function bboxStyle(bbox) {
 .page-title::after{content:'';width:70px;height:4px;background:#D9B38C;position:absolute;bottom:-8px;left:50%;transform:translateX(-50%);border-radius:3px}
 .desc{text-align:center;color:#666;margin:14px 0 0}
 
-.recognize-section{display:flex;flex-wrap:wrap;gap:30px;margin-bottom:50px;align-items:flex-start}
-.left-panel{flex:1;min-width:320px;display:flex;flex-direction:column;gap:18px}
+.recognize-section{display:flex;flex-wrap:wrap;gap:30px;margin-bottom:50px;align-items:stretch}
+.left-panel{flex:1 1 0;min-width:360px;display:flex;flex-direction:column}
 
-.upload-box{flex:1;min-height:460px;background:#fff;border:2px dashed #D9B38C;border-radius:12px;padding:18px;transition:.3s;display:flex;flex-direction:column;justify-content:center}
+.upload-box{flex:1;min-height:560px;height:560px;background:#fff;border:2px dashed #D9B38C;border-radius:12px;padding:18px;transition:.3s;display:flex;flex-direction:column;justify-content:center}
 .upload-box:hover{border-color:#80421D}
 .upload-box input{display:none}
 
@@ -440,26 +406,14 @@ function bboxStyle(bbox) {
 .danger-btn{background:#E65100;color:#fff;border-radius:6px;padding:8px 14px;border:none;cursor:pointer}
 .danger-btn:hover{opacity:.9}
 
-.detect-list{background:#fff;border-radius:10px;padding:12px;border:1px solid #F0E6DA;max-height:220px;overflow:auto}
-.detect-list h4{margin:0 0 8px;color:#80421D}
-.detect-list ul{list-style:none;padding:0;margin:0}
-.detect-list li{display:flex;gap:12px;align-items:center;padding:8px;border-radius:8px;cursor:pointer;transition:background .15s}
-.detect-list li:hover{background:#FBF6F1}
-.detect-list li.active{background:#FFF6EE;border:1px solid #F0D7BF}
-.detect-list .num{background:#80421D;color:#fff;width:30px;height:30px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-weight:700}
-.detect-list .meta{display:flex;flex-direction:column}
-.detect-list .meta .name{font-weight:600;color:#333}
-.detect-list .meta .conf{font-size:12px;color:#888}
-
-.result-box{flex:1;min-width:300px;background:#fff;border-radius:12px;padding:30px;box-shadow:0 3px 10px rgba(0,0,0,.05)}
+.result-box{flex:1 1 0;min-width:360px;height:560px;overflow-y:auto;background:#fff;border-radius:12px;padding:30px;box-shadow:0 3px 10px rgba(0,0,0,.05)}
 .result-box h3{color:#80421D;font-size:24px;margin-bottom:10px}
 .price-tag{display:inline-block;background:#FFF3E0;color:#E65100;padding:5px 12px;border-radius:20px;font-weight:700;margin:10px 0}
 .info-item{margin:8px 0}
 .info-item span{color:#80421D;font-weight:700}
 .hint{color:#888;margin-top:10px}
 
-.ordered-feature-list{margin-top:16px;padding-top:14px;border-top:1px dashed #E8D8C9;display:flex;flex-direction:column;gap:10px;max-height:320px;overflow:auto}
-.ordered-title{margin:0;color:#80421D;font-size:16px}
+.ordered-feature-list{display:flex;flex-direction:column;gap:10px}
 .feature-card{border:1px solid #F0E4D7;background:#FFFCF8;border-radius:10px;padding:10px;cursor:pointer;transition:.2s}
 .feature-card:hover{border-color:#D9B38C;box-shadow:0 2px 8px rgba(128,66,29,.08)}
 .feature-card.active{border-color:#E65100;background:#FFF4E8}
@@ -483,7 +437,7 @@ function bboxStyle(bbox) {
 @media (max-width:768px){
 	.nav-menu{display:none}
 	.recognize-section{flex-direction:column}
-	.upload-box,.result-box{min-width:100%}
+	.upload-box,.result-box{min-width:100%;height:auto;min-height:unset}
 	.table{font-size:14px}
 }
 </style>

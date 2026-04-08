@@ -1,6 +1,6 @@
 # TCM-AI 平台全项目扫描与分析报告（详细版）
 
-扫描日期：2026 年 4 月 6 日（最终复扫）  
+扫描日期：2026 年 4 月 6 日（最终复扫 + 代码验真增补）  
 扫描范围：仓库全量代码、配置、联调路径与文档一致性
 
 ## 文档导航
@@ -21,6 +21,10 @@
 3. Java 新增 AI 网关控制器与服务层，统一中转 chat/herb 请求。
 4. Python 服务已完成分层（routes + services + model runtime），`ai_server.py` 仅保留薄入口。
 5. `model/cmcrs/best.pth` 已接入推理运行时，支持 Top-K 返回。
+6. 前端 `src` 范围未发现直连 `http://localhost:5000` 的业务调用，符合“前端仅访问 Java 网关”。
+7. Agent 自动化当前配置值为 `app.agent.python.booking-mode=selenium-visible`（非 `mock`）。
+8. `tcm-ai-frontend/src/api/tongue.js` 文件存在但为空，舌诊 API 仍处于待完善状态。
+9. 数据库脚本当前仅显式维护 `app_user` 与 `consultation_log`，`agent_task` 主要依赖 JPA 自动建表。
 
 ---
 
@@ -164,7 +168,9 @@ Windows 终端中中文出现乱码主要是控制台编码显示问题，不代
 2. 依赖治理
    - Python requirements 未锁定精确版本。
 3. 模块完整性
-   - 舌诊链路仍未形成完整后端闭环。
+   - 舌诊链路仍未形成完整后端闭环（`src/api/tongue.js` 为空）。
+4. 数据库演进治理
+   - SQL 脚本未显式纳入 `agent_task` 建表，当前依赖 JPA `ddl-auto=update`。
 
 ### 5.3 低优先级风险
 
@@ -172,6 +178,8 @@ Windows 终端中中文出现乱码主要是控制台编码显示问题，不代
    - 缺少跨层请求追踪与结构化日志。
 2. 文档维护成本
    - 架构演进较快，需持续保持文档与实现同步。
+3. 子文档漂移
+   - `tcm-ai-frontend/README.md` 中部分路由与接口描述仍是旧版本（如 `/auth/login`、`tongue.js` 说明）。
 
 ---
 
@@ -238,3 +246,91 @@ Python AI 与模型：
 项目已完成关键架构升级：调用链从“前端直连多后端”演进为“前端 -> Java 网关 -> Python AI”统一入口模式，并已接入药材识别模型推理链路。当前系统已具备可联调、可扩展的基础形态。
 
 后续重点应从“功能打通”转向“安全治理 + 稳定性 + 工程化”，尤其是密钥管理、异常治理、测试与可观测性建设。
+
+---
+
+## 9. 本轮代码验真增补（2026-04-06）
+
+### 9.1 代码事实补充
+
+1. 前端 API 统一走 Java 网关：`src/api/chat.js`、`src/api/herb.js`、`src/api/agent.js` 均基于 `VITE_JAVA_API_BASE_URL`。
+2. Agent 入口已全局挂载：`src/App.vue` 通过 `<AgentButlerBubble />` 常驻。
+3. Java 安全基线：`/api/auth/**` 放行，其余请求统一鉴权；但 CORS 仍为 `*` 策略。
+4. Java -> Python 自动化桥接已落地：`AgentPythonAutomationBridge` 使用 `ProcessBuilder` 调用脚本并解析单行 JSON。
+5. Python AI 服务能力稳定分层：`/api/ai/chat`、`/api/ai/tool-plan`、`/api/herb/identify` 三条主能力链路均可在代码中定位。
+
+### 9.2 模块规模快照（按当前仓库统计）
+
+1. `tcm-ai-frontend/src`：约 44 个文件。
+2. `tcm-ai-backend/src/main/java`：约 41 个文件。
+3. `Traditional Chinese Medicine expert/server`：约 13 个文件。
+4. `model/cmcrs`：约 388 个文件（含大量测试样本图）。
+
+### 9.3 与文档保持一致的建议动作
+
+1. 在 `README.md` 与 `docs/ARCHITECTURE.md` 同步维护 `booking-mode` 当前值，避免“默认 mock”描述过期。
+2. 在数据库脚本中补充 `agent_task` 显式 DDL，减少对运行时自动建表的隐式依赖。
+3. 清理或完善 `src/api/tongue.js`，并同步修订 `tcm-ai-frontend/README.md` 的旧路由与旧接口描述。
+
+---
+
+## 10. 本轮全项目扫描整合（2026-04-07）
+
+本节基于对仓库现状的再次代码级核验（前端、后端、Python 服务、模型、数据库脚本），用于补充“当前可执行能力 + 缺口 + 风险证据”的一体化结论。
+
+### 10.1 一体化结论
+
+1. 三层调用链保持成立：前端统一调用 Java，Java 统一转发 Python（chat/herb/tool-plan）。
+2. Agent 双链路并存：
+   - 任务中心链（创建、审批、执行追踪）
+   - 大脑链（turn/progress + 工具规划 + 路由动作）
+3. 自动挂号桥接为真实子进程调用（Java ProcessBuilder -> Python 脚本），并支持执行模式切换。
+4. 舌诊仍是“前端原型态”：页面完整、后端接口缺失、前端 API 文件为空。
+5. 数据库脚本仍只显式覆盖 `app_user` 与 `consultation_log`；`agent_task` 继续依赖 JPA 自动建表。
+
+### 10.2 按子系统归纳
+
+#### 前端（tcm-ai-frontend）
+
+1. API 网关化仍然稳定，`chat.js`、`herb.js`、`agent.js` 均通过 `VITE_JAVA_API_BASE_URL` 访问 Java。
+2. 根组件已常驻挂载 `AgentButlerBubble`，Agent 能力在全站生效。
+3. 舌诊页面具备完整交互，但 `src/api/tongue.js` 为空，未接入后端闭环。
+
+#### 后端（tcm-ai-backend）
+
+1. 控制器分组明确：Auth、Consultation、AiGateway、AgentTask、AgentBrain。
+2. `AiGatewayService` 统一承接 `/api/ai/chat`、`/api/herb/identify`、`/api/ai/tool-plan` 的 Python 转发。
+3. `AgentPythonAutomationBridge` 负责 `python -X utf8` 调用、参数透传、超时终止、JSON 回读。
+4. `SecurityConfig` 仍为宽松跨域 + CSRF 禁用，生产策略需收紧。
+
+#### Python AI 服务（Traditional Chinese Medicine expert/server）
+
+1. 路由面当前为 3 个能力端点：`/api/ai/chat`、`/api/ai/tool-plan`、`/api/herb/identify`。
+2. 服务层仍采用 `chat_service.py + herb_service.py + model_runtime.py` 分层。
+3. `chat_service.py` 仍包含 DeepSeek API Key 默认值兜底，存在敏感信息风险。
+
+#### 模型（model/cmcrs）
+
+1. 权重 `best.pth` 与 `config/models/engine` 主链文件齐备。
+
+### 10.3 风险证据快照（本轮核验）
+
+1. 明文配置风险：`spring.datasource.password`、`jwt.secret`、`app.admin.password`、DeepSeek API Key 默认值。
+2. 安全边界风险：`SecurityConfig` 中 `setAllowedOriginPatterns("*")`、`csrf.disable()`，且多个 Controller 仍带 `@CrossOrigin`。
+3. 闭环风险：舌诊仅有前端能力，无 Java Controller/Service 与 Python Route。
+4. 运维风险：自动挂号脚本路径依赖相对路径与运行目录，部署时需额外校验。
+
+### 10.4 模块规模快照（本次统计口径）
+
+1. `tcm-ai-frontend/src/**`：47 个文件。
+2. `tcm-ai-backend/src/main/java/**/*.java`：41 个文件。
+3. `Traditional Chinese Medicine expert/server/**/*.py`：7 个文件。
+4. `model/cmcrs/**`：388 个文件（含测试样本与缓存文件）。
+
+### 10.5 建议优先级（按紧急度）
+
+1. P0：敏感配置环境变量化（DB/JWT/DeepSeek），并清理默认明文兜底。
+2. P0：收紧 CORS 白名单与 CSRF 策略，减少跨域攻击面。
+3. P1：补齐舌诊后端接口与网关路径，形成与问诊/识草一致的三层闭环。
+4. P1：数据库脚本新增 `agent_task` 显式 DDL，降低环境漂移。
+5. P2：为 Agent 自动化桥接增加健康检查与失败重试，强化演示稳定性。

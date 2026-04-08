@@ -13,9 +13,11 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -26,6 +28,7 @@ public class AiGatewayService {
     private final String pythonBaseUrl;
     private final String chatPath;
     private final String herbPath;
+    private final String toolPlanPath;
     private final long readTimeoutMs;
 
     public AiGatewayService(
@@ -33,6 +36,7 @@ public class AiGatewayService {
             @Value("${python.ai.base-url:http://localhost:5000}") String pythonBaseUrl,
             @Value("${python.ai.chat-path:/api/ai/chat}") String chatPath,
             @Value("${python.ai.herb-path:/api/herb/identify}") String herbPath,
+            @Value("${python.ai.tool-plan-path:/api/ai/tool-plan}") String toolPlanPath,
             @Value("${python.ai.connect-timeout-ms:5000}") long connectTimeoutMs,
             @Value("${python.ai.read-timeout-ms:60000}") long readTimeoutMs
     ) {
@@ -40,6 +44,7 @@ public class AiGatewayService {
         this.pythonBaseUrl = trimTrailingSlash(pythonBaseUrl);
         this.chatPath = ensureLeadingSlash(chatPath);
         this.herbPath = ensureLeadingSlash(herbPath);
+        this.toolPlanPath = ensureLeadingSlash(toolPlanPath);
         this.readTimeoutMs = readTimeoutMs;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(connectTimeoutMs))
@@ -76,6 +81,30 @@ public class AiGatewayService {
             return objectMapper.convertValue(root.path("data"), objectMapper.getTypeFactory().constructMapType(LinkedHashMap.class, String.class, Object.class));
         } catch (IOException e) {
             throw new IllegalStateException("药材识别服务响应解析失败");
+        }
+    }
+
+    public Map<String, Object> planAgentTool(String content, String currentPath, List<Map<String, Object>> tools) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("content", content);
+            payload.put("history", new ArrayList<>());
+            payload.put("tools", tools == null ? List.of() : tools);
+            payload.put("context", Map.of("currentPath", currentPath == null ? "" : currentPath));
+
+            String responseBody = postJson(buildUrl(toolPlanPath), objectMapper.writeValueAsString(payload));
+            JsonNode root = objectMapper.readTree(responseBody);
+            int code = root.path("code").asInt(500);
+            if (code != 200) {
+                throw new IllegalStateException(root.path("msg").asText("工具规划服务暂时不可用"));
+            }
+
+            return objectMapper.convertValue(
+                    root.path("data"),
+                    objectMapper.getTypeFactory().constructMapType(LinkedHashMap.class, String.class, Object.class)
+            );
+        } catch (IOException e) {
+            throw new IllegalStateException("工具规划服务响应解析失败");
         }
     }
 
