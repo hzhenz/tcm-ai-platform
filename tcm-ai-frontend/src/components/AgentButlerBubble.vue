@@ -1053,7 +1053,7 @@ watch(
 .agent-butler-root {
   position: fixed;
   right: 24px;
-  bottom: 28px;
+  top: 112px;
   z-index: 2200;
   font-family: "Noto Serif SC", "Songti SC", serif;
 }
@@ -1786,7 +1786,7 @@ watch(
 @media (max-width: 768px) {
   .agent-butler-root {
     right: 16px;
-    bottom: 20px;
+    top: 96px;
   }
 
   .butler-panel {

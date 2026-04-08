@@ -45,6 +45,19 @@
       </transition>
     </main>
 
+    <Transition name="fade">
+      <button
+        v-if="activeTab !== 'meridian' && showBackToTop"
+        class="back-to-top"
+        @click="backToTop"
+        title="回到顶部"
+      >
+        <svg class="back-to-top-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M7 14L12 9L17 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </Transition>
+
     <footer class="science-footer glass-panel">
       <p class="footer-info">宣传中医文化，普及中医知识</p>
     </footer>
@@ -52,7 +65,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import MeridianSection from '@/components/science/MeridianSection.vue'
 import DiagnosisSection from '@/components/science/DiagnosisSection.vue'
@@ -60,6 +73,7 @@ import HistorySection from '@/components/science/SolarTermSection.vue'
 
 const router = useRouter()
 const activeTab = ref('meridian')
+const showBackToTop = ref(false)
 
 const sectionMap = {
   meridian: MeridianSection,
@@ -72,6 +86,26 @@ const currentSection = computed(() => sectionMap[activeTab.value] || MeridianSec
 const goBack = () => {
   router.push('/')
 }
+
+const backToTop = () => {
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth'
+  })
+}
+
+const handleScroll = () => {
+  showBackToTop.value = window.scrollY > 300
+}
+
+onMounted(() => {
+  window.addEventListener('scroll', handleScroll, { passive: true })
+  handleScroll()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleScroll)
+})
 </script>
 
 <style scoped>
@@ -214,6 +248,48 @@ const goBack = () => {
   z-index: 1;
 }
 
+.back-to-top {
+  position: fixed;
+  bottom: 80px;
+  right: 30px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1C2B26 0%, #2C3E35 100%);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(28, 43, 38, 0.3);
+  z-index: 999;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.back-to-top:hover {
+  width: 56px;
+  height: 56px;
+  bottom: 82px;
+  right: 28px;
+  box-shadow: 0 8px 24px rgba(28, 43, 38, 0.4);
+  background: linear-gradient(135deg, #C2A878 0%, #D4B896 100%);
+}
+
+.back-to-top:active {
+  transform: scale(0.95);
+}
+
+.back-to-top-icon {
+  width: 24px;
+  height: 24px;
+  color: #fff;
+  transition: color 0.3s ease;
+}
+
+.back-to-top:hover .back-to-top-icon {
+  color: #1C2B26;
+}
+
 /* ================= 页脚 ================= */
 .science-footer { margin-top: 60px; padding: 40px 24px; text-align: center; border-top: 1px solid var(--glass-border); border-radius: 24px 24px 0 0; }
 .science-footer p { margin: 0 0 8px; font-weight: 600; color: var(--jade); }
@@ -230,5 +306,35 @@ const goBack = () => {
 @media (max-width: 768px) {
   .header-content { flex-wrap: wrap; gap: 16px; justify-content: center; }
   .header-nav { width: 100%; justify-content: center; }
+
+  .back-to-top {
+    width: 48px;
+    height: 48px;
+    bottom: 70px;
+    right: 20px;
+  }
+
+  .back-to-top:hover {
+    width: 48px;
+    height: 48px;
+    bottom: 70px;
+    right: 20px;
+  }
+
+  .back-to-top-icon {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
 }
 </style>
