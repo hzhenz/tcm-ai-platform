@@ -50,6 +50,11 @@ const router = createRouter({
       component: () => import('../views/apps/RegisterView.vue')
     },
     {
+      path: '/about',
+      name: 'about',
+      component: () => import('../views/About/AboutView.vue')
+    },
+    {
       path: '/profile',
       name: 'profile',
       component: () => import('../views/apps/PersonalCenterView.vue')
@@ -59,7 +64,7 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem(TOKEN_KEY)
-  const publicPaths = ['/', '/login', '/register']
+  const publicPaths = ['/', '/login', '/register', '/about']
   const requiresAuth = !publicPaths.includes(to.path)
 
   if (requiresAuth && !token) {

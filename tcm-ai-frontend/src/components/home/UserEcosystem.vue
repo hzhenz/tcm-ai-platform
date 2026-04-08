@@ -4,9 +4,9 @@
       <div class="user-box reveal-item">
         <div class="user-bg-pattern"></div>
         <div class="user-content">
-          <h2>加入中医志愿者生态</h2>
-          <p>参与验证舌象、药材数据，获取健康积分。不仅能解锁专属专家科普内容，更有机会登上平台贡献排行榜，共建中医数字传承生态！</p>
-          <button class="btn btn-outline light" @click="emit('action', { type: 'login' })">立即加入计划</button>
+          <h2>关于我们</h2>
+          <p>我们致力于探索中医与人工智能的深度融合，通过AI技术为中医诊断、辨识、养生提供科学工具。平台不仅传承中医千年的智慧结晶，还以数字化形式推广中医文化，让更多人体验到传统与现代科技结合的健康生活。</p>
+          <button class="btn btn-outline light" @click="emit('action', { type: 'about' })">了解更多</button>
         </div>
       </div>
     </div>
