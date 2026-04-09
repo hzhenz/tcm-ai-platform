@@ -27,7 +27,10 @@
             <h3>小佗</h3>
             <p>可对话、可执行、可引导全站操作</p>
           </div>
-          <button class="close-btn" type="button" @pointerdown.stop @click="panelVisible = false">x</button>
+          <div class="header-actions">
+            <OpenClawStatus />
+            <button class="close-btn" type="button" @pointerdown.stop @click="panelVisible = false">x</button>
+          </div>
         </header>
 
         <p v-if="viewportWidth > 768" class="panel-resize-tip">拖动四边或四角可调整窗口大小</p>
@@ -95,6 +98,9 @@
           </div>
 
           <div class="brain-toggle-row">
+            <div class="execution-channel" :class="`channel-${executionChannel}`">
+              当前执行通道：{{ executionChannelText }}
+            </div>
             <label class="llm-toggle">
               <input v-model="llmEnabled" type="checkbox" />
               接入大语言模型辅助回复
@@ -232,6 +238,13 @@ import { useAgentExecution } from '@/components/agent-butler/composables/useAgen
 import { useAgentTaskCenter } from '@/components/agent-butler/composables/useAgentTaskCenter'
 import { useAgentReminder } from '@/components/agent-butler/composables/useAgentReminder'
 import { useAgentBrain } from '@/components/agent-butler/composables/useAgentBrain'
+import { useOpenClaw } from '@/components/agent-butler/composables/useOpenClaw'
+import OpenClawStatus from '@/components/OpenClawStatus.vue'
+import {
+  ClawTaskType,
+  createBookingCommand,
+  createReminderCommand
+} from '@/api/openclaw-protocol.js'
 
 const TOKEN_KEY = 'tcm_token'
 const LOCAL_REMINDER_KEY = 'tcm_medication_reminders'
@@ -270,6 +283,7 @@ const brainLoading = ref(false)
 const brainScrollRef = ref(null)
 const llmEnabled = ref(true)
 const brainMessages = ref([])
+const executionChannel = ref('unknown')
 const executionPanelCollapsed = ref(true)
 const panelRef = ref(null)
 const panelHorizontalDock = ref('right')
@@ -326,6 +340,12 @@ function parseResult(result) {
 function syncAuthState() {
   loggedIn.value = Boolean(localStorage.getItem(TOKEN_KEY))
 }
+
+const executionChannelText = computed(() => {
+  if (executionChannel.value === 'openclaw') return 'OpenClaw 本地代理'
+  if (executionChannel.value === 'backend') return '服务端回退'
+  return '未判定'
+})
 
 function dismissGuide() {
   showGuide.value = false
@@ -536,6 +556,15 @@ const { reminderDraft, tryHandleMedicationReminder } = useAgentReminder({
   pushExecutionStep,
   markExecutionFailed
 })
+
+// OpenClaw 本地代理连接
+const {
+  connectionState: clawConnectionState,
+  isReady: isClawReady,
+  isConnected: isClawConnected,
+  executeTask: executeClawTask,
+  supportsTask: clawSupportsTask
+} = useOpenClaw()
 
 const { rootRef, rootStyle, startDrag, handleClick } = useAgentDrag(panelVisible, togglePanel, {
   onPositionChange: () => {
@@ -828,6 +857,67 @@ async function sendBrainMessage(forcedText = '') {
   }
 }
 
+/**
+ * 通过 OpenClaw 本地代理执行挂号
+ */
+async function executeBookingViaOpenClaw(userText) {
+  executionChannel.value = 'openclaw'
+  // 解析科室和日期
+  const departmentMatch = userText.match(/(中医科|针灸科|推拿科|骨科|内科|外科|妇科|儿科|皮肤科)/)
+  const department = departmentMatch ? departmentMatch[1] : '中医科'
+  
+  const dateMatch = userText.match(/(今天|明天|后天|\d{4}-\d{1,2}-\d{1,2})/)
+  const date = dateMatch ? dateMatch[1] : '明天'
+  
+  pushExecutionStep('检测到本地代理已连接，将使用本地浏览器执行挂号。', 'running', 'BOOKING_EXECUTE')
+  
+  try {
+    const command = createBookingCommand({
+      department,
+      date,
+      hospitalUrl: 'https://www.cs4hospital.cn/'
+    })
+    
+    pushExecutionStep('正在启动本地浏览器...', 'running', 'BOOKING_EXECUTE')
+    
+    const result = await executeClawTask(command, {
+      onProgress: (data) => {
+        if (data.stage === 'FILLING_FORM') {
+          enqueueExecutionStep('正在自动填写挂号表单...', 'running', 'BOOKING_EXECUTE')
+        } else if (data.stage === 'WAITING_CONFIRMATION') {
+          enqueueExecutionStep('请在本地浏览器中确认并提交', 'running', 'BOOKING_EXECUTE')
+        } else if (data.message) {
+          enqueueExecutionStep(data.message, 'running', 'BOOKING_EXECUTE')
+        }
+      }
+    })
+    
+    if (result.success) {
+      markExecutionDone(`本地挂号成功！预约号：${result.bookingNo}`)
+      addBrainMessage(
+        'agent',
+        `🎉 挂号成功！\n\n科室：${department}\n日期：${date}\n预约号：${result.bookingNo}${result.queueNo ? `\n排队号：${result.queueNo}` : ''}\n\n已通过本地浏览器完成挂号，可在浏览器中查看详情。`,
+        [
+          { label: '查看任务中心', action: 'switch-task-tab' },
+          { label: '创建服药提醒', action: 'send', payload: { text: '帮我创建服药提醒' } }
+        ]
+      )
+    } else {
+      throw new Error(result.error || '挂号未成功')
+    }
+  } catch (error) {
+    executionChannel.value = 'backend'
+    pushExecutionStep(`本地挂号失败：${error.message}，回退到服务端任务`, 'error', 'BOOKING_FAILED')
+    // 回退到服务端任务
+    addBrainMessage(
+      'agent',
+      `本地挂号未能完成（${error.message}）。已为你创建服务端挂号任务，请在任务中心审批执行。`,
+      [{ label: '查看任务中心', action: 'switch-task-tab' }]
+    )
+    await createBookingTaskFromUserText(userText, true)
+  }
+}
+
 async function handleLocalIntent(intent, userText) {
   switch (intent.type) {
     case 'EMERGENCY_RISK': {
@@ -856,7 +946,13 @@ async function handleLocalIntent(intent, userText) {
         ])
         break
       }
-      await createBookingTaskFromUserText(userText, true)
+      // 优先使用 OpenClaw 本地代理执行挂号
+      if (isClawReady.value && clawSupportsTask(ClawTaskType.HOSPITAL_BOOKING)) {
+        await executeBookingViaOpenClaw(userText)
+      } else {
+        executionChannel.value = 'backend'
+        await createBookingTaskFromUserText(userText, true)
+      }
       break
     case 'CREATE_MEDICATION_REMINDER':
       await tryHandleMedicationReminder(userText)
@@ -903,6 +999,7 @@ async function handleLocalIntent(intent, userText) {
         ])
         break
       }
+      executionChannel.value = 'backend'
       await createBookingTaskFromUserText(userText, false)
       break
     case 'CREATE_WECHAT_TASK':
@@ -1216,7 +1313,7 @@ watch(
   background: rgba(251, 251, 249, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.5);
   box-shadow: 0 24px 60px rgba(28, 43, 38, 0.1);
-  overflow: hidden;
+  overflow: visible;
   resize: none;
 }
 
@@ -1338,6 +1435,12 @@ watch(
   justify-content: space-between;
   padding: 20px 24px 16px;
   border-bottom: 1px solid rgba(194, 168, 120, 0.2);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .panel-drag-handle {
@@ -1590,6 +1693,30 @@ watch(
 
 .brain-toggle-row {
   padding: 0 20px 8px;
+}
+
+.execution-channel {
+  margin-bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 14px;
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1px solid rgba(194, 168, 120, 0.25);
+  color: #6a5a3f;
+  background: #fff8ed;
+}
+
+.execution-channel.channel-openclaw {
+  border-color: rgba(34, 197, 94, 0.35);
+  color: #1e7a3e;
+  background: #eefcf2;
+}
+
+.execution-channel.channel-backend {
+  border-color: rgba(59, 130, 246, 0.35);
+  color: #215a9a;
+  background: #eef5ff;
 }
 
 .llm-toggle {

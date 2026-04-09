@@ -58,6 +58,11 @@ const router = createRouter({
       path: '/profile',
       name: 'profile',
       component: () => import('../views/apps/PersonalCenterView.vue')
+    },
+    {
+      path: '/settings/local-agent',
+      name: 'local-agent',
+      component: () => import('../views/apps/LocalAgentSetup.vue')
     }
   ]
 })

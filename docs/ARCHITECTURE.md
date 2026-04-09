@@ -1,6 +1,6 @@
 # TCM-AI 平台全项目扫描与分析报告（详细版）
 
-扫描日期：2026-04-08（增量复扫）  
+扫描日期：2026-04-09（增量复扫）  
 扫描范围：仓库全量代码、配置、数据库脚本、前后端与 Python 联调路径、文档一致性
 
 ## 文档导航
@@ -30,10 +30,10 @@
 
 ### 2.1 一体化结论
 
-1. 主架构稳定：前端仅访问 Java 网关，Java 统一转发 Python AI 服务。
+1. 主架构稳定：前端对服务端仅访问 Java 网关，Java 统一转发 Python AI 服务；另有可选 OpenClaw 本地代理链路用于本地自动化演示。
 2. Agent 能力稳定：任务中心（V1）+ 统一大脑（V2）并存。
 3. 自动挂号链路真实：Java ProcessBuilder 启动 Python 脚本，解析单行 JSON 结果。
-4. 舌诊仍未闭环：前端页面存在，但后端/API 未形成同构链路。
+4. 舌诊仍未闭环：前端页面存在且可演示（本地存储/报告生成），但后端/API 未形成同构链路，当前未接入 Java/Python。
 5. 安全与配置仍是首要治理点：明文/默认密钥、宽 CORS、CSRF 禁用。
 
 ### 2.2 本轮确认事实
@@ -43,6 +43,7 @@
 3. 数据库.sql 与 数据库2.txt 仅显式维护 app_user、consultation_log。
 4. app.agent.python.booking-mode 当前值为 selenium-visible。
 5. src/api/tongue.js 仍为空文件。
+6. AgentButlerBubble 存在 OpenClaw 本地代理接入：默认健康检查 http://127.0.0.1:18789/health，WebSocket ws://127.0.0.1:18789/tcm。
 
 ---
 
@@ -54,12 +55,21 @@
 2. Java 后端 -> Python AI 服务（5000）与 MySQL。
 3. Python AI 服务 -> Chroma 向量库 + DeepSeek + ResNet 推理。
 
+补充（可选本地链路，不经过服务端）：
+
+4. 前端 -> OpenClaw 本地代理（127.0.0.1:18789）-> 用户本地浏览器（用于挂号自动化演示；失败回退服务端任务中心）。
+
 ### 3.2 网关与转发关系
 
 1. POST /api/ai/chat -> Java AiGatewayController -> Python /api/ai/chat。
 2. POST /api/herb/identify -> Java AiGatewayController -> Python /api/herb/identify。
 3. POST /api/agent/brain/turn -> Java AgentBrainService -> Python /api/ai/tool-plan（工具规划，可回退本地规则）。
 4. 任务中心相关接口由 Java 本地持久化与执行调度承接。
+
+补充：Java 后端还承接用户业务接口（非 AI 网关）。
+
+1. POST /api/auth/register、POST /api/auth/login（放行）。
+2. GET /api/consultation/history、POST /api/consultation/save、DELETE /api/consultation/delete/{id}（鉴权）。
 
 ---
 
@@ -73,10 +83,11 @@
 2. 问诊、药材识别均通过 VITE_JAVA_API_BASE_URL 访问 Java。
 3. Agent 入口常驻：src/App.vue 挂载 <AgentButlerBubble />。
 4. 服药提醒链路可执行：站内本地存储 + .ics 导出 + 低风险任务写入。
+5. 可选 OpenClaw 本地代理：当本地代理就绪时，挂号可优先走本地浏览器自动化；失败回退服务端任务中心。
 
 #### 待完善
 
-1. src/api/tongue.js 空文件，舌诊后端链路未接通。
+1. 舌诊当前为前端本地页面演示（TongueView.vue 内固定示例结果 + 本地存储），src/api/tongue.js 为空文件；后端链路未接通。
 
 ### 4.2 后端（tcm-ai-backend）
 
@@ -170,7 +181,7 @@
 
 ### 6.2 未闭环链路
 
-1. 舌诊：前端页面完备，但缺少 Java Controller/Service 与 Python Route 对应实现。
+1. 舌诊：前端页面完备且可演示，但缺少 Java Controller/Service 与 Python Route 对应实现（目前不产生服务端数据闭环）。
 
 ---
 
@@ -200,18 +211,18 @@
 
 ---
 
-## 8. 模块规模快照（2026-04-08）
+## 8. 模块规模快照（2026-04-09）
 
 ### 8.1 全文件口径
 
-1. tcm-ai-frontend/src：60
+1. tcm-ai-frontend/src：68
 2. tcm-ai-backend/src/main/java：41
 3. Traditional Chinese Medicine expert/server：29
 4. model/cmcrs：20
 
 ### 8.2 代码文件口径
 
-1. 前端常用代码文件（.js/.vue/.css/.md）：49
+1. 前端常用代码文件（.js/.vue/.css/.md）：57
 2. 后端 Java（.java）：41
 3. Python server（.py）：7
 4. model/cmcrs（.py）：14
@@ -251,8 +262,11 @@
 - tcm-ai-frontend/src/api/chat.js
 - tcm-ai-frontend/src/api/herb.js
 - tcm-ai-frontend/src/api/agent.js
+- tcm-ai-frontend/src/api/openclaw-protocol.js
 - tcm-ai-frontend/src/api/tongue.js
 - tcm-ai-frontend/src/components/AgentButlerBubble.vue
+- tcm-ai-frontend/src/components/agent-butler/composables/useOpenClaw.js
+- tcm-ai-frontend/src/views/Tongue/TongueView.vue
 - tcm-ai-frontend/src/components/agent-butler/composables/useAgentReminder.js
 
 后端：
@@ -295,6 +309,8 @@ Python AI 与模型：
 
 ## 12. 变更记录
 
-1. 2026-04-08：完成增量复扫，统一并修正文档中的规模统计与风险描述。
-2. 2026-04-08：补充 Agent 执行语义说明（真实自动化 vs 模拟执行）。
-3. 2026-04-06：首次完成三层网关架构文档化归档。
+1. 2026-04-09：补充 OpenClaw 本地代理可选链路与关键文件；补齐 auth/consultation 接口范围；更新规模统计与舌诊现状表述。
+
+2. 2026-04-08：完成增量复扫，统一并修正文档中的规模统计与风险描述。
+3. 2026-04-08：补充 Agent 执行语义说明（真实自动化 vs 模拟执行）。
+4. 2026-04-06：首次完成三层网关架构文档化归档。
