@@ -126,7 +126,9 @@
 已确认：
 
 1. best.pth、config、models、engine 主链文件齐备。
-2. 运行时通过 model_runtime.py 加载权重并返回 top-k 结果。
+2. 运行时通过 model_runtime.py 已升级为“YOLO 多目标检测 + ResNet 分类”融合链路：
+   - 检测命中时返回 detections（含 bbox、detectorConfidence）并对每个目标做 top-k 分类。
+   - 无检测模型或未检测到目标时自动降级为单图分类，保持接口可用。
 
 ---
 

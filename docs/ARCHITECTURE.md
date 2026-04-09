@@ -125,7 +125,8 @@
 ### 4.4 模型（model/cmcrs）
 
 1. 权重与主链文件齐备：best.pth、config、models、engine。
-2. model_runtime.py 已接入权重加载和 top-k 推理输出。
+2. model_runtime.py 已升级为双模型融合：YOLO 多目标检测（bbox）+ ResNet 分类（top-k）。
+3. 服务端 /api/herb/identify 返回 detections 明细；检测不可用时回退单图分类，保证兼容。
 
 ---
 
