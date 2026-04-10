@@ -12,7 +12,7 @@
       />
 
       <!-- Hero Banner -->
-      <div data-aos="fade-up" data-aos-duration="1200" data-aos-delay="200">
+      <div id="home" data-aos="fade-up" data-aos-duration="1200" data-aos-delay="200">
         <HeroBanner @navigate="goTo" />
       </div>
 
@@ -110,8 +110,6 @@ const handleAction = ({ type }) => {
     router.push('/login')
   } else if (type === 'register') {
     router.push('/register')
-  } else if (type === 'about') {
-    router.push('/about')
   }
 }
 

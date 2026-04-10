@@ -17,7 +17,9 @@
         >
           <div class="content-area">
             <div class="card-icon-wrap">
-              <div class="card-icon bg-green">👁️</div>
+              <div class="card-icon bg-green">
+                <img src="/sz.png" alt="舌诊图标" style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover;">
+              </div>
               <span class="badge-core">核心引擎</span>
             </div>
             <h3>AI舌诊与体质分析</h3>
@@ -25,11 +27,7 @@
             <div class="card-action">立即开启舌象扫描 <span>→</span></div>
           </div>
           <!-- 抽象装饰 -->
-          <div class="deco-circles">
-            <div class="circle-1"></div>
-            <div class="circle-2"></div>
-            <div class="glass-orb"></div>
-          </div>
+          
         </div>
 
         <!-- 核心功能2: 智能辨证问诊 (高屏卡片) -->
@@ -40,7 +38,7 @@
         >
           <div class="content-area">
             <div class="card-icon-wrap">
-              <div class="card-icon bg-gold">⚕️</div>
+              <img src="/wz.png" alt="问诊图标" style="width: 68px; height: 68px; border-radius: 50%; object-fit: cover;">
               <span class="badge-pro">Pro</span>
             </div>
             <h3>AI 辨证问诊</h3>
@@ -62,7 +60,7 @@
           @click="emit('navigate', '/herb')"
         >
           <div class="card-icon-wrap">
-            <div class="card-icon">🌿</div>
+            <img src="/sb.png" alt="识别图标" style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover;">
           </div>
           <h3>中药影像识别</h3>
           <p>手机随手拍，极速识别数百种常见中草药，查阅药典权威解读与日常食疗配伍。</p>
@@ -77,7 +75,7 @@
           @click="emit('navigate', '/science')"
         >
            <div class="card-icon-wrap">
-            <div class="card-icon">📖</div>
+            <img src="/kp.png" alt="科普图标" style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover;">
           </div>
           <h3>节气与针砭科普</h3>
           <p>顺应四时变化，收录海量节气养生指南、经络穴位详解及古籍方剂，传承千年智慧。</p>
@@ -397,4 +395,37 @@ const emit = defineEmits(['navigate'])
     font-size: 28px;
   }
 }
+
+/* 舌诊卡片：渐变 + 背景图片 */
+.bento-tongue {
+  background: linear-gradient(135deg, rgba(242, 249, 246, 0.85), rgba(255, 255, 255, 0.85)), url('/sz2.jpg');
+  background-size: cover, cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* 问诊卡片：渐变 + 背景图片 */
+.bento-consult {
+  background: linear-gradient(135deg, rgba(255, 252, 243, 0.85), rgba(255, 255, 255, 0.85)), url('/wz2.jpg');
+  background-size: cover, cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* 中药识别卡片：添加渐变 + 背景图片（原有无渐变，现增加半透明白色渐变） */
+.bento-herb {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.85)), url('/sb2.jpg');
+  background-size: cover, cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* 科普卡片：渐变 + 背景图片 */
+.bento-science {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.85)), url('/kp2.jpg');
+  background-size: cover, cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
 </style>

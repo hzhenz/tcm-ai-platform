@@ -55,7 +55,7 @@ const navItems = [
   { id: 'home', label: '首 页' },
   { id: 'function', label: '核心功能' },
   { id: 'local', label: '本地服务' },
-  { id: 'user', label: '关于我们' }
+  { id: 'user', label: '加入我们' }
 ]
 
 const emit = defineEmits(['section-change', 'nav-action'])
