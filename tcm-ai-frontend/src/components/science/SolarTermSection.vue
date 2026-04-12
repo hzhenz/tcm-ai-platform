@@ -225,9 +225,9 @@ onUnmounted(() => {
    ==================== */
 .no-scroll-container {
   position: relative;
-  width: 100vw;
-  margin-left: calc(50% - 50vw);
-  margin-right: calc(50% - 50vw);
+  width: 100%;
+  margin-left: 0;
+  margin-right: 0;
   margin-top: -40px;
   margin-bottom: -40px;
   min-height: calc(100vh * 4.2);
@@ -241,12 +241,12 @@ onUnmounted(() => {
 
 .color-block-transition {
   position: fixed;
-  top: 0;
-  right: -100%;
-  width: 200%;
-  height: 100vh;
+  top: 64px;
+  left: var(--science-sidebar-offset, 0px);
+  width: calc((100vw - var(--science-sidebar-offset, 0px)) * 2);
+  height: calc(100vh - 64px);
   clip-path: polygon(0 0, 100% 0, 70% 100%, 0% 100%);
-  z-index: 650;
+  z-index: 12;
   pointer-events: none;
   will-change: transform, opacity;
 }
@@ -256,11 +256,11 @@ onUnmounted(() => {
    ==================== */
 .detail-immerse-container {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: 700;
+  top: 64px;
+  left: var(--science-sidebar-offset, 0px);
+  width: calc(100vw - var(--science-sidebar-offset, 0px));
+  height: calc(100vh - 64px);
+  z-index: 12;
   pointer-events: none;
   display: flex;
   align-items: center;
@@ -379,9 +379,9 @@ onUnmounted(() => {
 .scroll-indicator {
   position: fixed;
   bottom: 40px;
-  left: 50%;
+  left: calc(var(--science-sidebar-offset, 0px) + (100vw - var(--science-sidebar-offset, 0px)) / 2);
   transform: translateX(-50%);
-  z-index: 3;
+  z-index: 13;
   text-align: center;
   animation: pulse-indicator 2s ease-in-out infinite;
 }
@@ -467,6 +467,24 @@ onUnmounted(() => {
 @media (max-width: 900px) {
   .detail-title {
     font-size: 2.5rem;
+  }
+
+  .color-block-transition {
+    top: 64px;
+    left: 0;
+    width: 200%;
+    height: calc(100vh - 64px);
+  }
+
+  .detail-immerse-container {
+    top: 64px;
+    left: 0;
+    width: 100vw;
+    height: calc(100vh - 64px);
+  }
+
+  .scroll-indicator {
+    left: 50%;
   }
 }
 </style>

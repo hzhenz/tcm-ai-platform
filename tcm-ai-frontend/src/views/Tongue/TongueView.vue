@@ -1,6 +1,35 @@
 <template>
   <div class="app-container">
-    <div class="header">智能望诊 · 望闻问切之"望"</div>
+    <header class="page-nav-bar fixed top-0 left-0 right-0 bg-ancient-tan text-white text-center py-3 text-lg font-bold shadow-md z-30 flex items-center justify-center gap-4 md:gap-6">
+      <span class="page-nav-title whitespace-nowrap">中医智能望诊</span>
+
+      <div class="page-nav-items flex items-center gap-3 md:gap-4">
+        <button @click="goToAiTongue" class="page-nav-item flex flex-col items-center transition-colors duration-200" :class="{ active: currentPage === 'aiTongue' }" style="color: white;" @mouseover="e => e.currentTarget.style.color = '#E8D8B0'" @mouseout="e => e.currentTarget.style.color = 'white'">
+          <i class="fa-solid fa-face-smile text-base md:text-lg"></i>
+          <span class="text-xs mt-0.5 hidden md:inline">AI舌诊</span>
+        </button>
+
+        <button @click="goToAiConsult" class="page-nav-item flex flex-col items-center transition-colors duration-200" style="color: white;" @mouseover="e => e.currentTarget.style.color = '#E8D8B0'" @mouseout="e => e.currentTarget.style.color = 'white'">
+          <i class="fa-solid fa-user-doctor text-base md:text-lg"></i>
+          <span class="text-xs mt-0.5 hidden md:inline">AI问诊</span>
+        </button>
+
+        <button @click="goToHerbRecog" class="page-nav-item flex flex-col items-center transition-colors duration-200" style="color: white;" @mouseover="e => e.currentTarget.style.color = '#E8D8B0'" @mouseout="e => e.currentTarget.style.color = 'white'">
+          <i class="fa-solid fa-leaf text-base md:text-lg"></i>
+          <span class="text-xs mt-0.5 hidden md:inline">中药识别</span>
+        </button>
+
+        <button @click="goToTcmScience" class="page-nav-item flex flex-col items-center transition-colors duration-200" style="color: white;" @mouseover="e => e.currentTarget.style.color = '#E8D8B0'" @mouseout="e => e.currentTarget.style.color = 'white'">
+          <i class="fa-solid fa-book-open text-base md:text-lg"></i>
+          <span class="text-xs mt-0.5 hidden md:inline">中医科普</span>
+        </button>
+
+        <button @click="goToHome" class="page-nav-item flex flex-col items-center transition-colors duration-200" style="color: white;" @mouseover="e => e.currentTarget.style.color = '#E8D8B0'" @mouseout="e => e.currentTarget.style.color = 'white'">
+          <i class="fa-solid fa-house text-base md:text-lg"></i>
+          <span class="text-xs mt-0.5 hidden md:inline">返回首页</span>
+        </button>
+      </div>
+    </header>
 
     <div class="container">
       <div class="main-row">
@@ -152,7 +181,31 @@
 
 <script setup>
 import { ref, onUnmounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { analyzeTongueByImage } from '@/api/tongue'
+
+const router = useRouter()
+const currentPage = ref('aiTongue')
+
+const goToHome = () => {
+  router.push({ name: 'home' })
+}
+
+const goToAiTongue = () => {
+  router.push({ name: 'tongue' })
+}
+
+const goToAiConsult = () => {
+  router.push({ name: 'consultation' })
+}
+
+const goToHerbRecog = () => {
+  router.push({ name: 'herb' })
+}
+
+const goToTcmScience = () => {
+  router.push({ name: 'science' })
+}
 
 // --- DOM 引用 ---
 const videoRef = ref(null)
@@ -807,29 +860,25 @@ onUnmounted(() => {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: "Ma Shan Zheng", "SimSun", serif;
+  font-family: "Source Han Serif SC", "Noto Serif SC", STZhongsong, "Microsoft YaHei", serif;
 }
 body {
   background-color: #F8F5E8;
   color: #5C3A21;
   min-height: 100vh;
-  padding-top: 60px;
+  padding-top: 78px;
   padding-bottom: 20px;
 }
-.header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  background-color: #A67C52;
-  color: white;
-  text-align: center;
-  padding: 10px 0;
-  font-weight: bold;
-  font-size: 18px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  z-index: 100;
+
+.page-nav-item.active {
+  color: #E8D8B0 !important;
+  filter: drop-shadow(0 0 6px rgba(194, 168, 120, 0.8));
 }
+
+.page-nav-bar {
+  background: linear-gradient(180deg, #1C2B26 0%, #16211d 100%);
+}
+
 .container {
   max-width: 1200px;
   margin: 0 auto;

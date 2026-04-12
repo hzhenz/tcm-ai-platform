@@ -1,16 +1,33 @@
 <template>
-	<div class="herb-page">
-		<header class="header-shell">
-			<div class="container header-row">
-				<div>
-					<p class="kicker">TCM VISION LAB</p>
-					<h1 class="title">草药多目标识别工作台</h1>
-					<p class="subtitle">检测框定位 + 单目标精细分类 + 中草药知识映射的融合视图</p>
-				</div>
-				<div class="header-actions">
-					<router-link to="/" class="nav-link">返回首页</router-link>
-					<router-link to="/consultation" class="nav-link solid">进入问诊</router-link>
-				</div>
+	<div class="herb-page font-chinese text-ancient-dark bg-ancient-light">
+		<header class="page-nav-bar fixed top-0 left-0 right-0 bg-ancient-tan text-white text-center py-3 text-lg font-bold shadow-md z-30 flex items-center justify-center gap-4 md:gap-6">
+			<span class="page-nav-title whitespace-nowrap">药材智能识别</span>
+
+			<div class="page-nav-items flex items-center gap-3 md:gap-4">
+				<button @click="goToAiTongue" class="page-nav-item flex flex-col items-center transition-colors duration-200" style="color: white;" @mouseover="e => e.currentTarget.style.color = '#E8D8B0'" @mouseout="e => e.currentTarget.style.color = 'white'">
+					<i class="fa-solid fa-face-smile text-base md:text-lg"></i>
+					<span class="text-xs mt-0.5 hidden md:inline">AI舌诊</span>
+				</button>
+
+				<button @click="goToAiConsult" class="page-nav-item flex flex-col items-center transition-colors duration-200" style="color: white;" @mouseover="e => e.currentTarget.style.color = '#E8D8B0'" @mouseout="e => e.currentTarget.style.color = 'white'">
+					<i class="fa-solid fa-user-doctor text-base md:text-lg"></i>
+					<span class="text-xs mt-0.5 hidden md:inline">AI问诊</span>
+				</button>
+
+				<button @click="goToHerbRecog" class="page-nav-item flex flex-col items-center transition-colors duration-200" :class="{ active: currentPage === 'herbRecog' }" style="color: white;" @mouseover="e => e.currentTarget.style.color = '#E8D8B0'" @mouseout="e => e.currentTarget.style.color = 'white'">
+					<i class="fa-solid fa-leaf text-base md:text-lg"></i>
+					<span class="text-xs mt-0.5 hidden md:inline">中药识别</span>
+				</button>
+
+				<button @click="goToTcmScience" class="page-nav-item flex flex-col items-center transition-colors duration-200" style="color: white;" @mouseover="e => e.currentTarget.style.color = '#E8D8B0'" @mouseout="e => e.currentTarget.style.color = 'white'">
+					<i class="fa-solid fa-book-open text-base md:text-lg"></i>
+					<span class="text-xs mt-0.5 hidden md:inline">中医科普</span>
+				</button>
+
+				<button @click="goToHome" class="page-nav-item flex flex-col items-center transition-colors duration-200" style="color: white;" @mouseover="e => e.currentTarget.style.color = '#E8D8B0'" @mouseout="e => e.currentTarget.style.color = 'white'">
+					<i class="fa-solid fa-house text-base md:text-lg"></i>
+					<span class="text-xs mt-0.5 hidden md:inline">返回首页</span>
+				</button>
 			</div>
 		</header>
 
@@ -227,9 +244,13 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import { useHerbIdentify } from './useHerbIdentify'
+
+const router = useRouter()
+const currentPage = ref('herbRecog')
 
 const {
 	fileInput,
@@ -268,30 +289,58 @@ function formatTopkConfidence(value) {
 	const confidence = Number(value)
 	return Number.isFinite(confidence) ? `${(confidence * 100).toFixed(1)}%` : '--'
 }
+
+const goToHome = () => router.push({ name: 'home' })
+
+const goToAiTongue = () => {
+	router.push({ name: 'tongue' })
+}
+
+const goToAiConsult = () => {
+	router.push({ name: 'consultation' })
+}
+
+const goToHerbRecog = () => {
+	router.push({ name: 'herb' })
+}
+
+const goToTcmScience = () => {
+	router.push({ name: 'science' })
+}
 </script>
 
 <style scoped>
 .herb-page {
-	--bg-main: #f3eee1;
-	--bg-deep: #e7dbc2;
-	--bg-card: rgba(255, 252, 245, 0.88);
-	--stroke: rgba(142, 103, 57, 0.18);
-	--text-main: #2f2418;
-	--text-soft: #6c5a45;
-	--brand: #80421d;
-	--brand-strong: #613116;
-	--accent: #db7a27;
-	--accent-2: #1d805f;
+	--bg-main: #f7f2e8;
+	--bg-deep: #efe4d2;
+	--bg-card: rgba(255, 252, 245, 0.92);
+	--stroke: rgba(194, 168, 120, 0.28);
+	--text-main: #1c2b26;
+	--text-soft: #5f6a66;
+	--brand: #1c2b26;
+	--brand-strong: #13211d;
+	--accent: #c2a878;
+	--accent-2: #8a6b32;
 	--danger: #cc5134;
-	--shadow: 0 16px 40px rgba(66, 36, 18, 0.12);
+	--shadow: 0 16px 40px rgba(28, 43, 38, 0.12);
 	min-height: 100vh;
 	padding-bottom: 32px;
 	background:
-		radial-gradient(circle at 100% 0%, rgba(219, 122, 39, 0.22), transparent 36%),
-		radial-gradient(circle at 0% 24%, rgba(29, 128, 95, 0.12), transparent 35%),
+		radial-gradient(circle at 100% 0%, rgba(194, 168, 120, 0.18), transparent 36%),
+		radial-gradient(circle at 0% 24%, rgba(28, 43, 38, 0.08), transparent 35%),
 		linear-gradient(180deg, var(--bg-main), var(--bg-deep));
 	color: var(--text-main);
-	font-family: 'STZhongsong', 'Songti SC', 'Noto Serif SC', serif;
+	font-family: 'Noto Serif SC', 'Songti SC', 'STSong', 'Microsoft YaHei', serif;
+	padding-top: 64px;
+}
+
+.bg-ancient-tan {
+	background-color: #1C2B26;
+}
+
+.page-nav-item.active {
+	color: #E8D8B0 !important;
+	filter: drop-shadow(0 0 6px rgba(194, 168, 120, 0.8));
 }
 
 .herb-page::before {
@@ -300,7 +349,7 @@ function formatTopkConfidence(value) {
 	inset: 0;
 	pointer-events: none;
 	opacity: 0.2;
-	background-image: linear-gradient(120deg, rgba(128, 66, 29, 0.07) 1px, transparent 1px);
+	background-image: linear-gradient(120deg, rgba(194, 168, 120, 0.07) 1px, transparent 1px);
 	background-size: 26px 26px;
 }
 
@@ -487,11 +536,11 @@ function formatTopkConfidence(value) {
 .btn.primary {
 	background: linear-gradient(140deg, var(--brand), var(--brand-strong));
 	color: #fff;
-	box-shadow: 0 8px 20px rgba(97, 49, 22, 0.28);
+	box-shadow: 0 8px 20px rgba(28, 43, 38, 0.24);
 }
 
 .btn.ghost {
-	background: rgba(128, 66, 29, 0.09);
+	background: rgba(194, 168, 120, 0.12);
 	color: var(--brand);
 }
 
@@ -524,9 +573,9 @@ function formatTopkConfidence(value) {
 
 .bbox {
 	position: absolute;
-	border: 2px solid rgba(219, 122, 39, 0.95);
+	border: 2px solid rgba(194, 168, 120, 0.95);
 	border-radius: 10px;
-	background: rgba(219, 122, 39, 0.08);
+	background: rgba(194, 168, 120, 0.1);
 	cursor: pointer;
 	transition: transform 0.2s ease, border-color 0.2s ease;
 }
@@ -537,7 +586,7 @@ function formatTopkConfidence(value) {
 
 .bbox.active {
 	border-color: var(--accent-2);
-	background: rgba(29, 128, 95, 0.16);
+	background: rgba(28, 43, 38, 0.12);
 }
 
 .bbox-id {
@@ -552,7 +601,7 @@ function formatTopkConfidence(value) {
 	justify-content: center;
 	font-size: 12px;
 	font-weight: 700;
-	background: var(--accent);
+	background: var(--accent-2);
 	color: #fff;
 }
 
@@ -587,13 +636,13 @@ function formatTopkConfidence(value) {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	background: rgba(128, 66, 29, 0.12);
+	background: rgba(194, 168, 120, 0.18);
 	font-size: 11px;
 }
 
 .tab-pill.active {
 	border-color: var(--accent-2);
-	background: rgba(29, 128, 95, 0.1);
+	background: rgba(28, 43, 38, 0.08);
 }
 
 .insight-column {
@@ -617,7 +666,7 @@ function formatTopkConfidence(value) {
 }
 
 .status-dot.online {
-	background: rgba(29, 128, 95, 0.15);
+	background: rgba(28, 43, 38, 0.12);
 	color: var(--accent-2);
 }
 
@@ -668,12 +717,12 @@ function formatTopkConfidence(value) {
 }
 
 .runtime-path {
-	background: rgba(128, 66, 29, 0.08);
+	background: rgba(194, 168, 120, 0.12);
 }
 
 .runtime-warning {
-	background: rgba(219, 122, 39, 0.14);
-	color: #8e4e1c;
+	background: rgba(194, 168, 120, 0.14);
+	color: #6f5a2d;
 }
 
 .runtime-error {
@@ -705,7 +754,7 @@ function formatTopkConfidence(value) {
 
 .result-item.active {
 	border-color: var(--accent-2);
-	box-shadow: 0 10px 22px rgba(29, 128, 95, 0.16);
+	box-shadow: 0 10px 22px rgba(28, 43, 38, 0.12);
 }
 
 .item-head {
@@ -781,8 +830,8 @@ function formatTopkConfidence(value) {
 	font-size: 11px;
 	padding: 4px 8px;
 	border-radius: 999px;
-	background: rgba(128, 66, 29, 0.08);
-	border: 1px solid rgba(128, 66, 29, 0.14);
+	background: rgba(194, 168, 120, 0.1);
+	border: 1px solid rgba(194, 168, 120, 0.18);
 }
 
 .skeleton-list {

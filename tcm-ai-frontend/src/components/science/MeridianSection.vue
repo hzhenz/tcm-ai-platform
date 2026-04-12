@@ -96,7 +96,7 @@ import HumanBody3D from '@/components/HumanBody3D.vue'
   gap: 32px;
   max-width: 1280px;
   margin: 0 auto;
-  align-items: stretch;
+  align-items: start;
 }
 
 .human-body-3d {
@@ -104,8 +104,8 @@ import HumanBody3D from '@/components/HumanBody3D.vue'
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  min-height: 600px;
-  height: 100%;
+  min-height: 500px;
+
 }
 
 .human-body-title-wrap {
@@ -138,9 +138,10 @@ import HumanBody3D from '@/components/HumanBody3D.vue'
 
 .meridian-info {
   display: grid;
-  grid-template-rows: repeat(3, minmax(0, 1fr));
-  gap: 20px;
-  height: 100%;
+  grid-template-rows: repeat(3, auto);
+  gap: 31px;
+  align-content: start;
+  height: auto
 }
 
 .info-card {

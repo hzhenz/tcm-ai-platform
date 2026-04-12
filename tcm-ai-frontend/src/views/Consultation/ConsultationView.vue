@@ -1,8 +1,34 @@
 <template>
-  <div class="bg-ancient-light font-chinese text-ancient-dark min-h-screen">
-    <header class="fixed top-0 left-0 right-0 bg-ancient-tan text-white text-center py-3 text-lg font-bold shadow-md z-30 flex items-center justify-center">
-      <i class="fa-solid fa-chevron-left absolute left-4 cursor-pointer text-xl" @click="goToHome"></i>
-      智能问诊 · 望闻问切之"问"
+  <div class="consultation-page bg-ancient-light font-chinese text-ancient-dark min-h-screen">
+    <header class="page-nav-bar fixed top-0 left-0 right-0 bg-ancient-tan text-white text-center py-3 text-lg font-bold shadow-md z-30 flex items-center justify-center gap-4 md:gap-6">
+      <span class="page-nav-title whitespace-nowrap">中医智能问诊</span>
+      
+      <div class="page-nav-items flex items-center gap-3 md:gap-4">
+        <button @click="goToAiTongue" class="page-nav-item flex flex-col items-center transition-colors duration-200" style="color: white;" @mouseover="e => e.currentTarget.style.color = '#E8D8B0'" @mouseout="e => e.currentTarget.style.color = 'white'">
+          <i class="fa-solid fa-face-smile text-base md:text-lg"></i>
+          <span class="text-xs mt-0.5 hidden md:inline">AI舌诊</span>
+        </button>
+        
+        <button @click="goToAiConsult" class="page-nav-item flex flex-col items-center transition-colors duration-200" :class="{ active: currentPage === 'aiConsult' }" style="color: white;" @mouseover="e => e.currentTarget.style.color = '#E8D8B0'" @mouseout="e => e.currentTarget.style.color = 'white'">
+          <i class="fa-solid fa-user-doctor text-base md:text-lg"></i>
+          <span class="text-xs mt-0.5 hidden md:inline">AI问诊</span>
+        </button>
+        
+        <button @click="goToHerbRecog" class="page-nav-item flex flex-col items-center transition-colors duration-200" style="color: white;" @mouseover="e => e.currentTarget.style.color = '#E8D8B0'" @mouseout="e => e.currentTarget.style.color = 'white'">
+          <i class="fa-solid fa-leaf text-base md:text-lg"></i>
+          <span class="text-xs mt-0.5 hidden md:inline">中药识别</span>
+        </button>
+        
+        <button @click="goToTcmScience" class="page-nav-item flex flex-col items-center transition-colors duration-200" style="color: white;" @mouseover="e => e.currentTarget.style.color = '#E8D8B0'" @mouseout="e => e.currentTarget.style.color = 'white'">
+          <i class="fa-solid fa-book-open text-base md:text-lg"></i>
+          <span class="text-xs mt-0.5 hidden md:inline">中医科普</span>
+        </button>
+        
+        <button @click="goToHome" class="page-nav-item flex flex-col items-center transition-colors duration-200" style="color: white;" @mouseover="e => e.currentTarget.style.color = '#E8D8B0'" @mouseout="e => e.currentTarget.style.color = 'white'">
+          <i class="fa-solid fa-house text-base md:text-lg"></i>
+          <span class="text-xs mt-0.5 hidden md:inline">返回首页</span>
+        </button>
+      </div>
     </header>
 
     <main class="pt-20 pb-6 flex flex-col md:flex-row gap-8 px-8 w-full h-screen">
@@ -52,8 +78,8 @@
         <div ref="chatContainerRef" class="flex-1 p-4 overflow-y-auto custom-scroll space-y-5 bg-white">
           <div v-for="(msg, index) in chatMessages" :key="index">
             <div v-if="msg.type === 'ai'" class="flex items-start gap-3">
-              <img src="https://picsum.photos/id/338/60/60" alt="古风医者" class="w-10 h-10 rounded-full border-2 border-ancient-border object-cover flex-shrink-0 mt-1">
-              <div class="ai-bubble" v-html="renderMarkdown(msg.content)"></div>
+                <img src="/lzy.png" alt="古风医者" class="w-10 h-10 rounded-full border-2 border-ancient-border object-cover flex-shrink-0 mt-1">
+               <div class="ai-bubble" v-html="renderMarkdown(msg.content)"></div>
             </div>
             <div v-else class="flex justify-end gap-3">
               <div class="user-bubble flex items-center gap-2">
@@ -181,6 +207,7 @@ const currentTime = ref('')
 const reportContentRef = ref(null)
 const isExporting = ref(false)
 const currentTopic = ref('新问诊')
+const currentPage = ref('aiConsult')
 
 const initialGreeting = { type: 'ai', content: '你好，我是智能中医医师。请告诉我你哪里不舒服，我会为你辨证问诊~' }
 const chatMessages = ref([ {...initialGreeting} ])
@@ -530,7 +557,23 @@ const downloadReport = async () => {
   }
 };
 
-const goToHome = () => router.push('/')
+const goToHome = () => router.push({ name: 'home' })
+
+const goToAiTongue = () => {
+  router.push({ name: 'tongue' })
+}
+
+const goToAiConsult = () => {
+  router.push({ name: 'consultation' })
+}
+
+const goToHerbRecog = () => {
+  router.push({ name: 'herb' })
+}
+
+const goToTcmScience = () => {
+  router.push({ name: 'science' })
+}
 
 const startVoiceRecognition = () => {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -553,41 +596,84 @@ const startVoiceRecognition = () => {
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;700&display=swap');
 
+.consultation-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(194, 168, 120, 0.16), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(28, 43, 38, 0.08), transparent 24%),
+    linear-gradient(180deg, #f7f2e8 0%, #efe4d2 100%);
+  color: #1c2b26;
+  font-family: "Noto Serif SC", "Songti SC", "STSong", "Microsoft YaHei", serif;
+}
+
+.font-chinese {
+  font-family: "Noto Serif SC", "Songti SC", "STSong", "Microsoft YaHei", serif;
+}
+
+.bg-ancient-light {
+  background-color: #f7f2e8;
+}
+
+.bg-ancient-cream {
+  background-color: #ede4d3;
+}
+
+.bg-ancient-tan {
+  background-color: #1c2b26;
+}
+
+.bg-ancient-dark {
+  background-color: #13211d;
+}
+
+.text-ancient-dark {
+  color: #1c2b26;
+}
+
+.border-ancient-border {
+  border-color: rgba(194, 168, 120, 0.35);
+}
+
+.page-nav-item.active {
+  color: #E8D8B0 !important;
+  filter: drop-shadow(0 0 6px rgba(194, 168, 120, 0.8));
+}
+
 /* === 聊天区域样式 === */
 .ai-bubble {
-  background-color: #F9F6EE;
-  border: 1px solid #D4B996;
+  background: linear-gradient(180deg, #fbf7ef 0%, #f2eadb 100%);
+  border: 1px solid rgba(194, 168, 120, 0.55);
   border-radius: 0.5rem;
   padding: 1rem 1.25rem; 
   max-width: 85%;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 10px 28px rgba(28, 43, 38, 0.08);
   line-height: 1.8; 
   font-size: 1.15rem; 
-  color: #3C2A21;
+  color: #24352f;
 }
 
 .user-bubble {
-  background-color: #F8F5E8;
-  border: 1px solid rgba(166, 124, 82, 0.2);
+  background: linear-gradient(180deg, #f4ebd8 0%, #eadbbf 100%);
+  border: 1px solid rgba(194, 168, 120, 0.32);
   border-radius: 0.5rem;
   padding: 1rem 1.25rem;
   max-width: 85%;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 10px 28px rgba(28, 43, 38, 0.08);
   line-height: 1.8;
   font-size: 1.15rem; 
   text-align: left;
-  color: #3C2A21;
+  color: #24352f;
 }
 
 .ai-bubble :deep(p) { margin-bottom: 0.85rem; }
 .ai-bubble :deep(p:last-child) { margin-bottom: 0; }
-.ai-bubble :deep(strong) { font-weight: bold; color: #8B4513; }
+.ai-bubble :deep(strong) { font-weight: bold; color: #8a6b32; }
 .ai-bubble :deep(ul) { list-style-type: disc; margin-left: 1.5rem; margin-bottom: 0.85rem; padding-left: 0.5rem; }
 .ai-bubble :deep(ol) { list-style-type: decimal; margin-left: 1.5rem; margin-bottom: 0.85rem; padding-left: 0.5rem; }
 .ai-bubble :deep(li) { margin-bottom: 0.4rem; }
-.ai-bubble :deep(h1) { font-size: 1.5rem; font-weight: bold; margin-top: 1.2rem; margin-bottom: 0.6rem; color: #3C2A21; }
-.ai-bubble :deep(h2) { font-size: 1.35rem; font-weight: bold; margin-top: 1.2rem; margin-bottom: 0.6rem; color: #3C2A21; }
-.ai-bubble :deep(h3) { font-size: 1.25rem; font-weight: bold; margin-top: 1.2rem; margin-bottom: 0.6rem; color: #3C2A21; }
+.ai-bubble :deep(h1) { font-size: 1.5rem; font-weight: bold; margin-top: 1.2rem; margin-bottom: 0.6rem; color: #1c2b26; }
+.ai-bubble :deep(h2) { font-size: 1.35rem; font-weight: bold; margin-top: 1.2rem; margin-bottom: 0.6rem; color: #1c2b26; }
+.ai-bubble :deep(h3) { font-size: 1.25rem; font-weight: bold; margin-top: 1.2rem; margin-bottom: 0.6rem; color: #1c2b26; }
 
 /* === 竹简弹窗样式 === */
 .bamboo-scroll {
@@ -612,10 +698,10 @@ const startVoiceRecognition = () => {
   width: 95%;
   max-width: 48rem;
   height: 85vh;
-  background-color: #F9F6EE; 
+  background-color: #f9f4e9; 
   background-image: url('https://www.transparenttextures.com/patterns/aged-paper.png');
   border-radius: 0.5rem;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5), inset 0 0 40px rgba(212, 185, 150, 0.2);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35), inset 0 0 40px rgba(194, 168, 120, 0.16);
   background-size: auto;
   background-position: center;
   padding: 4rem 3rem;
@@ -632,13 +718,13 @@ const startVoiceRecognition = () => {
 .report-markdown {
   font-size: 1.25rem;
   line-height: 1.9;
-  color: #3C2A21;
+  color: #24352f;
 }
 .report-markdown :deep(p) { margin-bottom: 1.25rem; }
 
 .report-markdown :deep(strong) { 
   font-weight: bold !important; 
-  color: #8B4513 !important; 
+  color: #8a6b32 !important; 
   background-color: transparent !important; 
   padding: 0 !important;
   border: none !important;
@@ -665,7 +751,7 @@ const startVoiceRecognition = () => {
   position: absolute;
   left: 0.5rem;
   top: 0;
-  color: #8B4513; 
+  color: #8a6b32; 
   font-weight: bold;
 }
 
@@ -675,13 +761,13 @@ const startVoiceRecognition = () => {
   position: absolute;
   left: 0.2rem;
   top: 0;
-  color: #8B4513; 
+  color: #8a6b32; 
   font-weight: bold;
 }
 
-.report-markdown :deep(h1) { font-size: 1.75rem; font-weight: bold; color: #5C3A21; margin-top: 1.8rem; margin-bottom: 1rem; }
-.report-markdown :deep(h2) { font-size: 1.5rem; font-weight: bold; color: #5C3A21; margin-top: 1.6rem; margin-bottom: 0.8rem; border-bottom: 1px dashed #D4B996; padding-bottom: 0.4rem; }
-.report-markdown :deep(h3) { font-size: 1.35rem; font-weight: bold; color: #5C3A21; margin-top: 1.4rem; margin-bottom: 0.8rem; }
+.report-markdown :deep(h1) { font-size: 1.75rem; font-weight: bold; color: #1c2b26; margin-top: 1.8rem; margin-bottom: 1rem; }
+.report-markdown :deep(h2) { font-size: 1.5rem; font-weight: bold; color: #1c2b26; margin-top: 1.6rem; margin-bottom: 0.8rem; border-bottom: 1px dashed rgba(194, 168, 120, 0.7); padding-bottom: 0.4rem; }
+.report-markdown :deep(h3) { font-size: 1.35rem; font-weight: bold; color: #1c2b26; margin-top: 1.4rem; margin-bottom: 0.8rem; }
 
 /* ⚡️ 导出 PDF 时专用的修复样式 */
 .export-mode,

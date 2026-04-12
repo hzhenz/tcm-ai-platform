@@ -30,7 +30,7 @@ const emit = defineEmits(['navigate'])
 }
 
 .bg-light {
-  background-color: #ffffff;
+  background-color: #F7F4E8;
 }
 
 .container {
@@ -154,4 +154,18 @@ const emit = defineEmits(['navigate'])
     padding: 60px 0;
   }
 }
+
+.glass-map {
+  width: 100%;
+  aspect-ratio: 4/3;
+  background: linear-gradient(135deg, rgba(240, 235, 225, 0.7), rgba(230, 223, 211, 0.7)), url('/dt.png');
+  background-size: cover;
+  background-position: center;
+  border-radius: 24px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 0 40px rgba(255,255,255,0.5), 0 10px 40px rgba(28, 43, 38, 0.05);
+  border: 4px solid #fff;
+}
+
 </style>
