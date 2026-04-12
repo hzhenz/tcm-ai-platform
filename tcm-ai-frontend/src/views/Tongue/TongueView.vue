@@ -27,10 +27,11 @@
             <button @click="selectPhoto" class="btn btn-tan">
               <i class="icon icon-image" style="margin-right:5px;"></i> 从相册选择
             </button>
-            <button @click="analyzeTongue" class="btn btn-green">
-              <i class="icon icon-search" style="margin-right:5px;"></i> 开始分析
+            <button @click="analyzeTongue" class="btn btn-green" :disabled="analyzeLoading">
+              <i class="icon icon-search" style="margin-right:5px;"></i> {{ analyzeLoading ? '分析中...' : '开始分析' }}
             </button>
           </div>
+          <p v-if="analyzeNotice" class="analyze-notice">{{ analyzeNotice }}</p>
           <input type="file" ref="fileInputRef" accept="image/*" class="file-input" @change="loadPhoto">
         </div>
 
@@ -47,12 +48,29 @@
             <p v-else style="color: #999;">请先上传舌象并分析</p>
           </div>
 
-          <div v-if="showAnalysis" class="analysis-result">
-            <p><strong>AI辨证：</strong><span style="color: #C62828;">{{ diagnosis }}</span></p>
-            <div style="font-size: 14px; margin-top: 10px;">
-              <p><strong>食疗方：</strong>{{ dietSuggestion }}</p>
-              <p><strong>穴位按压：</strong>{{ acupointSuggestion }}</p>
+          <div v-if="showAnalysis" class="analysis-dashboard">
+            <div class="result-boxes">
+              <div class="result-box">
+                <div class="box-title">舌象分析</div>
+                <div class="result-lines">
+                  <p v-for="(line, idx) in tongueFeatureLines" :key="`feature-${idx}`" class="result-line">{{ line }}</p>
+                </div>
+              </div>
+
+              <div class="result-box">
+                <div class="box-title">中医辨证结论</div>
+                <p class="result-paragraph">{{ syndromeConclusionText }}</p>
+              </div>
+
+              <div class="result-box">
+                <div class="box-title">健康建议</div>
+                <p class="result-paragraph">{{ healthAdviceText }}</p>
+              </div>
             </div>
+          </div>
+
+          <div v-if="analyzeError" class="analysis-result" style="border-color:#e57373;background:#fff5f5;">
+            <p><strong>分析失败：</strong><span style="color:#c62828;">{{ analyzeError }}</span></p>
           </div>
 
           <button @click="generateReport" class="btn btn-tan btn-block">
@@ -110,10 +128,6 @@
               <span class="value">{{ dietSuggestion }}</span>
             </div>
             <div class="detail-item">
-              <span class="label">📍 穴位按压：</span>
-              <span class="value">{{ acupointSuggestion }}</span>
-            </div>
-            <div class="detail-item">
               <span class="label">💡 养生提醒：</span>
               <span class="value">少食肥甘厚味，适当运动，调畅情志。</span>
             </div>
@@ -138,6 +152,7 @@
 
 <script setup>
 import { ref, onUnmounted, computed } from 'vue'
+import { analyzeTongueByImage } from '@/api/tongue'
 
 // --- DOM 引用 ---
 const videoRef = ref(null)
@@ -152,9 +167,14 @@ let mediaStream = null
 const thumbUrl = ref('')
 const visualUrl = ref('')
 const showAnalysis = ref(false)
-const diagnosis = ref('湿热证候 87%')
-const dietSuggestion = ref('薏米红豆粥、冬瓜海带汤')
-const acupointSuggestion = ref('足三里、阴陵泉（每日2次）')
+const diagnosis = ref('待分析')
+const dietSuggestion = ref('待分析')
+const tongueFeatureLines = ref(['舌象：待分析'])
+const syndromeConclusionText = ref('待分析')
+const healthAdviceText = ref('待分析')
+const analyzeLoading = ref(false)
+const analyzeNotice = ref('')
+const uploadedImageFile = ref(null)
 const REPORT_HISTORY_KEY = 'tongueReportHistory'
 
 // 打卡数据：存为数组 of { day: number, date: 'YYYY-MM-DD', timestamp: ISO string, image?: string }
@@ -205,6 +225,267 @@ const formatTimestamp = (iso) => {
 const formatTime = (iso) => {
   if (!iso) return ''
   try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) } catch (e) { return iso }
+}
+
+const STRUCTURED_TONGUE_PROMPT = [
+  '请根据图片做中医舌诊，并严格输出 JSON。',
+  '必须包含且仅包含以下3个一级字段：',
+  '1) 舌象特征（对象，建议含舌色/舌形/舌苔/舌神）',
+  '2) 中医辨证结论（字符串）',
+  '3) 健康建议（字符串）',
+  '不要输出 markdown，不要输出代码块标记。',
+  '如果图片不是舌象，请明确写“图像非舌象，无法可靠辨证”。',
+  '禁止使用固定模板，必须依据当前图片内容作答。'
+].join('\n')
+
+const cleanText = (text) => {
+  if (!text) return ''
+  return String(text)
+    .replace(/^```(?:json)?/i, '')
+    .replace(/```$/i, '')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/\\n/g, '\n')
+    .replace(/^['"]+|['"]+$/g, '')
+    .trim()
+}
+
+const normalizeLooseKey = (key) => String(key || '')
+  .replace(/[\u200B-\u200D\uFEFF]/g, '')
+  .replace(/[\s\t\r\n]+/g, '')
+  .replace(/[：:]/g, '')
+  .replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '')
+
+const pickObjectField = (obj, candidateKeys = []) => {
+  if (!obj || typeof obj !== 'object') return ''
+  for (const candidate of candidateKeys) {
+    if (typeof obj[candidate] === 'string' && obj[candidate].trim()) {
+      return cleanText(obj[candidate])
+    }
+
+    const target = normalizeLooseKey(candidate)
+    for (const [rawKey, value] of Object.entries(obj)) {
+      if (normalizeLooseKey(rawKey) === target && typeof value === 'string' && value.trim()) {
+        return cleanText(value)
+      }
+    }
+  }
+  return ''
+}
+
+const extractFieldFromRawText = (raw, candidateKeys = []) => {
+  const source = cleanText(raw)
+  if (!source) return ''
+
+  for (const key of candidateKeys) {
+    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const regex = new RegExp(`"?\\s*${escaped}\\s*"?\\s*[:：]\\s*"?([^\\n\\r，,}]+)`, 'i')
+    const matched = source.match(regex)
+    if (matched && matched[1]) {
+      const value = cleanText(matched[1]).replace(/["}]+$/g, '').trim()
+      if (value) return value
+    }
+  }
+  return ''
+}
+
+const parseFeatureSummary = (summaryText) => {
+  const summary = cleanText(summaryText)
+  if (!summary) return {}
+
+  const result = {}
+  const chunks = summary
+    .split(/[，,。；;\n]/)
+    .map(item => item.trim())
+    .filter(Boolean)
+
+  const assignByChunk = (label, keyword) => {
+    const hit = chunks.find(chunk => chunk.includes(keyword))
+    if (!hit) return
+    const value = cleanText(
+      hit
+        .replace(new RegExp(`^.*?${keyword}[:：]?`, 'i'), '')
+        .replace(/^(为|呈|见|偏|较)/, '')
+        .trim()
+    )
+    if (value) {
+      result[label] = value
+    }
+  }
+
+  assignByChunk('舌色', '舌色')
+  assignByChunk('舌形', '舌形')
+  assignByChunk('舌苔', '舌苔')
+  assignByChunk('舌神', '舌神')
+  assignByChunk('舌质', '舌质')
+
+  return result
+}
+
+const flattenKeyValuePairs = (node, bucket = []) => {
+  if (node === null || node === undefined) return bucket
+
+  if (Array.isArray(node)) {
+    node.forEach((item) => flattenKeyValuePairs(item, bucket))
+    return bucket
+  }
+
+  if (typeof node !== 'object') return bucket
+
+  for (const [rawKey, value] of Object.entries(node)) {
+    const key = normalizeLooseKey(rawKey)
+    if (!key) continue
+
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      const text = cleanText(String(value))
+      if (text) {
+        bucket.push([key, text])
+      }
+      continue
+    }
+
+    if (value && typeof value === 'object' && !Array.isArray(value) && typeof value.value === 'string') {
+      const text = cleanText(value.value)
+      if (text) {
+        bucket.push([key, text])
+      }
+    }
+
+    flattenKeyValuePairs(value, bucket)
+  }
+
+  return bucket
+}
+
+const tryParseRawJson = (raw) => {
+  const text = cleanText(raw)
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  if (start < 0 || end <= start) return null
+  try {
+    return JSON.parse(text.slice(start, end + 1))
+  } catch (_e) {
+    return null
+  }
+}
+
+const pickFirstString = (obj, keys = []) => {
+  if (!obj) return ''
+
+  const entries = Object.entries(obj)
+  for (const key of keys) {
+    if (typeof obj[key] === 'string' && obj[key].trim()) {
+      return cleanText(obj[key])
+    }
+
+    const target = normalizeLooseKey(key)
+    for (const [rawKey, value] of entries) {
+      if (normalizeLooseKey(rawKey) === target && typeof value === 'string' && value.trim()) {
+        return cleanText(value)
+      }
+    }
+  }
+
+  return ''
+}
+
+const pickFirstObject = (obj, keys = []) => {
+  if (!obj) return null
+
+  const entries = Object.entries(obj)
+  for (const key of keys) {
+    if (obj[key] && typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
+      return obj[key]
+    }
+
+    const target = normalizeLooseKey(key)
+    for (const [rawKey, value] of entries) {
+      if (normalizeLooseKey(rawKey) === target && value && typeof value === 'object' && !Array.isArray(value)) {
+        return value
+      }
+    }
+  }
+
+  return null
+}
+
+const buildStructuredPrompt = () => `${STRUCTURED_TONGUE_PROMPT}\n当前请求标识：${Date.now()}`
+
+const normalizeTongueData = (data = {}) => {
+  const rawText = typeof data.raw_output === 'string' ? cleanText(data.raw_output) : ''
+  const parsedRaw = tryParseRawJson(rawText) || {}
+
+  const tongueObj = pickFirstObject(data, ['舌象分析', '舌象特征', '五象分析'])
+    || pickFirstObject(parsedRaw, ['舌象分析', '舌象特征', '五象分析'])
+    || {}
+
+  const featureSummaryText = pickFirstString(data, ['舌象特征', '舌象分析'])
+    || pickFirstString(parsedRaw, ['舌象特征', '舌象分析'])
+    || extractFieldFromRawText(rawText, ['舌象特征', '舌象分析'])
+
+  const featureSummaryObj = parseFeatureSummary(featureSummaryText)
+
+  const allPairs = flattenKeyValuePairs({ data, parsedRaw, tongueObj })
+  const findFromPairs = (...keys) => {
+    for (const key of keys) {
+      const target = normalizeLooseKey(key)
+      const hit = allPairs.find(([k, v]) => k === target && v)
+      if (hit) return hit[1]
+    }
+    return ''
+  }
+
+  const readFeature = (...keys) => {
+    return pickObjectField(tongueObj, keys)
+      || pickObjectField(featureSummaryObj, keys)
+      || pickObjectField(data, keys)
+      || pickObjectField(parsedRaw, keys)
+      || findFromPairs(...keys)
+      || extractFieldFromRawText(rawText, keys)
+  }
+
+  const featureLines = []
+  const pushFeature = (label, value) => {
+    const text = cleanText(value)
+    if (text) {
+      featureLines.push(`${label}：${text}`)
+    }
+  }
+
+  pushFeature('舌色', readFeature('舌色') || cleanText(data?.tongue_color?.value))
+  pushFeature('舌形', readFeature('舌形'))
+  pushFeature('舌苔', readFeature('舌苔', '舌苔状态') || cleanText(data?.coating_quality?.value) || cleanText(data?.coating_color?.value))
+  pushFeature('舌神', readFeature('舌神') || cleanText(data?.vitality?.value))
+  pushFeature('舌质', readFeature('舌质'))
+  pushFeature('舌苔特征', readFeature('舌苔特征', '苔质', '苔色', '舌苔质', '舌苔色'))
+
+  if (!featureLines.length) {
+    featureLines.push('舌象：暂未解析到结构化特征')
+  }
+
+  const conclusion = pickFirstString(data, ['中医辨证结论', '中医辨证分析', '中医辨证', '辨证结论'])
+    || pickFirstString(parsedRaw, ['中医辨证结论', '中医辨证分析', '中医辨证', '辨证结论'])
+    || extractFieldFromRawText(rawText, ['中医辨证结论', '中医辨证分析', '中医辨证', '辨证结论'])
+    || cleanText(data?.syndrome?.conclusion)
+    || '未识别到明确辨证结论'
+
+  const confidence = Number(data?.syndrome?.confidence)
+  const finalConclusion = Number.isFinite(confidence)
+    ? `${conclusion}（置信度 ${Math.round(confidence)}%）`
+    : conclusion
+
+  const suggestions = Array.isArray(data.suggestions) ? data.suggestions : []
+  const dietItem = suggestions.find(item => String(item?.type || '').includes('饮食'))
+
+  const healthAdvice = pickFirstString(data, ['健康建议', '调理建议', '建议'])
+    || pickFirstString(parsedRaw, ['健康建议', '调理建议', '建议'])
+    || extractFieldFromRawText(rawText, ['健康建议', '调理建议', '建议'])
+
+  return {
+    featureLines,
+    conclusion: finalConclusion,
+    advice: cleanText(dietItem?.content) || healthAdvice || '建议清淡饮食，避免生冷油腻。'
+  }
 }
 
 // --- 打卡逻辑 ---
@@ -310,9 +591,11 @@ const requestCamera = async () => {
       isCameraActive.value = true
       // 清除之前的上传和分析状态
       uploadedImageUrl.value = ''
+      uploadedImageFile.value = null
       thumbUrl.value = ''
       visualUrl.value = ''
       showAnalysis.value = false
+      analyzeNotice.value = ''
     }
   } catch (err) {
     alert('摄像头调用失败，请检查权限或更换浏览器！\n错误信息：' + err.message)
@@ -350,12 +633,14 @@ const loadPhoto = (event) => {
   if (file) {
     const url = URL.createObjectURL(file)
     uploadedImageUrl.value = url
+    uploadedImageFile.value = file
     thumbUrl.value = url
     if (isCameraActive.value) {
       stopCamera()
     }
     showAnalysis.value = false
     visualUrl.value = ''
+    analyzeNotice.value = ''
   }
 }
 
@@ -385,11 +670,19 @@ const captureFromCamera = () => {
 
 // 分析舌象
 const analyzeTongue = async () => {
+  if (analyzeLoading.value) {
+    return
+  }
+
   let imageUrl = ''
+  let imageFile = uploadedImageFile.value
   if (isCameraActive.value) {
     try {
       imageUrl = await captureFromCamera()
       thumbUrl.value = imageUrl
+      const capturedBlob = await fetch(imageUrl).then(res => res.blob())
+      imageFile = new File([capturedBlob], `tongue-${Date.now()}.png`, { type: capturedBlob.type || 'image/png' })
+      uploadedImageFile.value = imageFile
       stopCamera()  // 分析完成后关闭摄像头，节省资源
     } catch (err) {
       alert(err)
@@ -397,17 +690,62 @@ const analyzeTongue = async () => {
     }
   } else if (uploadedImageUrl.value) {
     imageUrl = uploadedImageUrl.value
+    if (!imageFile) {
+      const uploadBlob = await fetch(imageUrl).then(res => res.blob())
+      imageFile = new File([uploadBlob], `tongue-upload-${Date.now()}.png`, { type: uploadBlob.type || 'image/png' })
+      uploadedImageFile.value = imageFile
+    }
   } else {
     alert('请先拍摄或上传舌象！')
     return
   }
 
   visualUrl.value = imageUrl
-  showAnalysis.value = true
-  // 模拟AI结果（实际可接入后端）
-  diagnosis.value = '湿热证候 87%'
-  dietSuggestion.value = '薏米红豆粥、冬瓜海带汤'
-  acupointSuggestion.value = '足三里、阴陵泉（每日2次）'
+  analyzeLoading.value = true
+  analyzeNotice.value = ''
+
+  const longWaitTimer = setTimeout(() => {
+    analyzeNotice.value = '模型分析时间较长，正在深度识别舌象，请耐心等待...'
+  }, 12000)
+
+  try {
+    const response = await analyzeTongueByImage(imageFile, {
+      simple: false,
+      customPrompt: buildStructuredPrompt(),
+      timeoutMs: 420000,
+      retryOnTimeout: true,
+      onRetry: () => {
+        analyzeNotice.value = '模型仍在加载中，已自动重试一次，请稍候...'
+      }
+    })
+
+    if (!response || response.code !== 200) {
+      throw new Error((response && response.msg) || '舌诊分析失败，请稍后重试')
+    }
+
+    const normalized = normalizeTongueData(response.data || {})
+    tongueFeatureLines.value = normalized.featureLines
+    syndromeConclusionText.value = normalized.conclusion
+    healthAdviceText.value = normalized.advice
+    diagnosis.value = normalized.conclusion
+    dietSuggestion.value = normalized.advice
+    showAnalysis.value = true
+  } catch (err) {
+    if (err?.code === 'UNAUTHORIZED' || err?.message === 'UNAUTHORIZED') {
+      localStorage.removeItem('tcm_token')
+      localStorage.removeItem('tcm_user')
+      alert('登录状态已过期，请重新登录')
+    } else {
+      alert(err?.message || '舌诊分析失败，请稍后重试')
+    }
+    showAnalysis.value = false
+  } finally {
+    clearTimeout(longWaitTimer)
+    analyzeLoading.value = false
+    if (showAnalysis.value) {
+      analyzeNotice.value = ''
+    }
+  }
 }
 
 // 生成报告：自动打卡 + 弹出美化报告单
@@ -443,7 +781,6 @@ const copyReportText = () => {
 （说明：报告使用的数据为您当天最后一次保存的打卡结果）
 辨证结果：${diagnosis.value}
 食疗建议：${dietSuggestion.value}
-穴位建议：${acupointSuggestion.value}
 养生提醒：少食肥甘厚味，适当运动，调畅情志。
 ——————————
 提示：本报告仅供参考，请勿作为诊疗依据，建议前往正规中医机构就诊。`
@@ -579,10 +916,20 @@ body {
 .btn-green:hover {
   opacity: 0.9;
 }
+.btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
 .btn-block {
   display: block;
   width: 100%;
   margin-top: 10px;
+}
+.analyze-notice {
+  margin-top: 12px;
+  text-align: center;
+  color: #8B6B42;
+  font-size: 13px;
 }
 .preview-img {
   width: 100%;
@@ -629,6 +976,47 @@ body {
 }
 .analysis-result strong {
   color: #A67C52;
+}
+.analysis-dashboard {
+  border: 1px solid #eadbc2;
+  border-radius: 14px;
+  padding: 14px;
+  background: #fffdfa;
+  margin-bottom: 20px;
+}
+.result-boxes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.result-box {
+  border: 1px solid #eadbc4;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px 12px;
+}
+.box-title {
+  color: #7f5a39;
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.result-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.result-line {
+  margin: 0;
+  color: #4b2f1c;
+  line-height: 1.5;
+  font-size: 14px;
+}
+.result-paragraph {
+  margin: 0;
+  color: #4b2f1c;
+  line-height: 1.65;
+  font-size: 14px;
 }
 .calendar-title {
   font-weight: bold;

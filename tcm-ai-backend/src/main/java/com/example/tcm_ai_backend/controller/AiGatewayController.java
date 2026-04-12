@@ -3,7 +3,6 @@ package com.example.tcm_ai_backend.controller;
 import com.example.tcm_ai_backend.dto.ai.AiChatRequest;
 import com.example.tcm_ai_backend.service.AiGatewayService;
 import com.example.tcm_ai_backend.utils.Result;
-import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -49,6 +48,33 @@ public class AiGatewayController {
         } catch (IOException e) {
             throw new IllegalStateException("读取上传图片失败");
         }
+    }
+
+    @PostMapping("/tongue/analyze")
+    public Result<Map<String, Object>> analyzeTongue(
+            @RequestParam("image") MultipartFile image,
+            @RequestParam(required = false) String customPrompt,
+            @RequestParam(defaultValue = "false") boolean simple
+    ) {
+        validateImage(image);
+        try {
+            Map<String, Object> data = aiGatewayService.analyzeTongue(
+                    image.getOriginalFilename(),
+                    image.getBytes(),
+                    customPrompt,
+                    simple
+            );
+            return Result.success(data);
+        } catch (IOException e) {
+            throw new IllegalStateException("读取上传图片失败");
+        } catch (Exception e) {
+            throw new IllegalStateException("舌诊调用失败: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
+        }
+    }
+
+    @PostMapping("/tongue/health")
+    public Result<Map<String, Object>> tongueHealth() {
+        return Result.success(aiGatewayService.tongueHealth());
     }
 
     private void validateImage(MultipartFile image) {

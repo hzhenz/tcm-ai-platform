@@ -3,9 +3,13 @@ flask-cors
 openai
 langchain-community
 langchain-huggingface
+sentence-transformers
 chromadb
 torch
 torchvision
+transformers
+qwen-vl-utils
+accelerate
 pillow
 selenium
 numpy
