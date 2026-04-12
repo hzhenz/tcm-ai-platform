@@ -1,0 +1,29 @@
+path: /17039/lvqi/4ccompetition/mubiaojiance/yolo_study # 当前目录
+train: /17039/lvqi/4ccompetition/mubiaojiance/yolo_study/train/images
+val: /17039/lvqi/4ccompetition/mubiaojiance/yolo_study/val/images
+test: /17039/lvqi/4ccompetition/mubiaojiance/yolo_study/test/images
+
+nc: 20
+names:
+  [
+    "BanXia",
+    "Cangshu",
+    "ChuanQiong",
+    "DuZhong",
+    "FuLing",
+    "HuangLian",
+    "HuangQi",
+    "HuoXiang",
+    "JinYingZi",
+    "JueMingZi",
+    "LianZiXin",
+    "MaiDong",
+    "QingHao",
+    "SangShenGan",
+    "SangYe",
+    "ShanYaoGan",
+    "ShiHu",
+    "XiXin",
+    "XiaKuCao",
+    "YiMi",
+  ]
